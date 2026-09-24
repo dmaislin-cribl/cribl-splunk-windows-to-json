@@ -1,0 +1,12 @@
+displayName: Windows Events to Nested JSON
+description: >-
+  Converts Windows Event Log XML (WEC/WEF, Sysmon, UF XML rendering) and
+  Classic rendered text to nested JSON in _raw. Sets sourcetype=windows:json
+  and source=windows:json:<Channel> so Cribl_TA_windows applies its
+  windows:json field extractions and CIM mapping.
+streamtags:
+  - windows
+  - events
+  - xml
+  - json
+  - splunk-ta

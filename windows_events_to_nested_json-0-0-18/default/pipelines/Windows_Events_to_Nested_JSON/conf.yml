@@ -1,0 +1,609 @@
+output: default
+streamtags: []
+groups: {}
+asyncFuncTimeout: 1000
+functions:
+  - id: comment
+    filter: "true"
+    conf:
+      comment: |-
+        Windows Events to Nested JSON
+
+        Converts Windows Event XML (WinEventLog, WEC/WEF, Sysmon) and Classic rendered text
+        to clean nested JSON preserving the natural event hierarchy.
+
+        Splunk (Cribl_TA_windows): sourcetype=windows:json, source=windows:json:<Channel> (KV_MODE=json).
+
+        Cribl Edge often has no source/sourcetype (Splunk UF fields). The Code step sets them from
+        System.Channel / LogName when they are missing so Splunk props still match.
+
+        Supported formats:
+          - XML: <Event><System>...</System><EventData>...</EventData></Event>
+          - Classic rendered text: Key=Value headers + tab-indented Message sections
+
+        Output structure mirrors the source event:
+          XML  → { System: {...}, EventData: {...}, UserData: {...}, RenderingInfo: {...} }
+          Text → { LogName, EventCode, ..., Message: { _summary, SectionName: { Key: Value } } }
+
+        No hardcoded field lists. Works with all Windows Event types including Sysmon,
+        Security, Application, System, PowerShell, WMI, and custom channels.
+  - id: code
+    filter: "true"
+    disabled: false
+    conf:
+      maxNumOfIterations: 5000
+      activeLogSampleRate: 1
+      useUniqueLogChannel: false
+      code: |-
+        // Windows Events to Nested JSON — Universal Parser
+        // Handles XML (WEC/WEF/Sysmon) and Classic rendered text formats.
+        // Recursively cleans parse artifacts (_value, named Data arrays) and
+        // preserves the natural nested structure of every Windows Event type.
+        // All key names have spaces replaced with underscores.
+        //
+        // ---------------------------------------------------------------------------
+        // BACKWARDS COMPATIBILITY: original (legacy) Message field
+        // ---------------------------------------------------------------------------
+        // By default the Classic parser replaces the flat "Message=..." text with a
+        // tokenized object (Message._summary, Message.Account_Name, ...). Users who
+        // still search the legacy flat Message string can turn that string back on
+        // with the flag below (no loss of tokenization).
+        //
+        // Settings may be overridden without editing this code by defining Cribl
+        // Global Variables (Processing > Knowledge > Global Variables):
+        //   keepOriginalMessage      (Boolean) default false
+        //   originalMessageMode      (String)  'sibling' (default) | 'nested'
+        //   tokenizedMessageField    (String)  default 'Message_fields'
+        //   originalMessageSubfield  (String)  default '_message'
+        //
+        // Modes when keepOriginalMessage = true:
+        //   'sibling' -> Message = original flat text (legacy searches keep working)
+        //                Message_fields = { _summary, Account_Name, Subject: {...} }
+        //   'nested'  -> Message = { _summary, Account_Name, ..., _message: "<original text>" }
+        //                (keeps today's Message.<subfield> paths, adds the raw text)
+        // ---------------------------------------------------------------------------
+
+        try {
+          const raw = (__e._raw || '').trim();
+
+          // ---------------------------------------------------------------
+          // Configuration (with optional Global Variable overrides)
+          // ---------------------------------------------------------------
+          var CFG = {
+            keepOriginalMessage: false,      // <-- set to true to keep the legacy Message string
+            originalMessageMode: 'sibling',  // 'sibling' | 'nested'
+            tokenizedMessageField: 'Message_fields',
+            originalMessageSubfield: '_message',
+            resolveWinCodes: true,           // resolve Windows %%NNNN message-file codes to human-readable values
+            preserveWinCodes: false,         // when true, keep the raw %%NNNN as <fieldname>_code
+            debugWinCodes: false             // when true, emit __lookup_state / __lookup_test / __lookup_error hidden fields (preview-only)
+          };
+
+          // Allow Global Variables to override the defaults above, when present.
+          try {
+            if (typeof C !== 'undefined' && C && C.vars) {
+              if (C.vars.keepOriginalMessage !== undefined) {
+                CFG.keepOriginalMessage = (String(C.vars.keepOriginalMessage).toLowerCase() === 'true' ||
+                                           C.vars.keepOriginalMessage === true);
+              }
+              if (C.vars.originalMessageMode) CFG.originalMessageMode = String(C.vars.originalMessageMode);
+              if (C.vars.tokenizedMessageField) CFG.tokenizedMessageField = String(C.vars.tokenizedMessageField);
+              if (C.vars.originalMessageSubfield) CFG.originalMessageSubfield = String(C.vars.originalMessageSubfield);
+              if (C.vars.resolveWinCodes !== undefined) {
+                CFG.resolveWinCodes = (String(C.vars.resolveWinCodes).toLowerCase() === 'true' ||
+                                       C.vars.resolveWinCodes === true);
+              }
+              if (C.vars.preserveWinCodes !== undefined) {
+                CFG.preserveWinCodes = (String(C.vars.preserveWinCodes).toLowerCase() === 'true' ||
+                                        C.vars.preserveWinCodes === true);
+              }
+              if (C.vars.debugWinCodes !== undefined) {
+                CFG.debugWinCodes = (String(C.vars.debugWinCodes).toLowerCase() === 'true' ||
+                                     C.vars.debugWinCodes === true);
+              }
+            }
+          } catch (cfgErr) { /* Global Variables unavailable — use defaults */ }
+
+          // ---------------------------------------------------------------
+          // Windows message-code (%%NNNN) resolution — mirrors what the
+          // Splunk Universal Forwarder does at collection time via the
+          // Windows message DLLs. When Cribl Edge (or another non-UF
+          // collector) is in the path, those DLLs aren't consulted and
+          // raw %%NNNN codes flow through in fields like EventData.Direction,
+          // EventData.LayerName, EventData.IsLoopback, etc.
+          //
+          // The lookup table ships in this pack at
+          //   data/lookups/windows_msg_codes.csv
+          // and can be extended by adding rows there (no code change needed).
+          //
+          // Behavior gated by CFG.resolveWinCodes (default true). Unknown
+          // codes are left as-is so future Microsoft additions never get
+          // dropped — they simply show up as "%%NNNN" until the lookup is
+          // updated.
+          // ---------------------------------------------------------------
+          // Cribl inline lookup — signature per Cribl Stream docs:
+          //   C.Lookup(filename, primaryKey, [outputCols], ignoreCase) -> InlineLookup
+          //   InlineLookup.match(value)                    -> boolean (exists?)
+          //   InlineLookup.match(value, fieldToReturn)     -> value from that column
+          //   InlineLookup.match(value, [fields])          -> row object (4.1+)
+          //
+          // Call notes (bit us in earlier versions of this pack):
+          //   * No `new` keyword — C.Lookup is a factory, not a constructor.
+          //   * Single-arg .match() returns a boolean, not the row. We must pass
+          //     the column name we want ('value') to get the resolved string.
+          //   * Input to match() must be a string; we already guarded with typeof.
+          //
+          // Restricting outputCols to ['value'] is a small optimization — we only
+          // ever read that one column.
+          var _winCodeLookup = null;
+          var _lookupInitError = null;
+          if (CFG.resolveWinCodes) {
+            try {
+              _winCodeLookup = C.Lookup('windows_msg_codes.csv', 'code', ['value']);
+            } catch (lookupErr) {
+              _lookupInitError = String(lookupErr);
+              _winCodeLookup = null;
+            }
+          }
+
+          // Optional debug output — hidden fields prefixed with __ so Cribl strips
+          // them before send; they survive to preview / capture views. Enable by
+          // setting the Cribl Global Variable debugWinCodes=true. Off in prod.
+          if (CFG.debugWinCodes) {
+            if (_winCodeLookup) {
+              __e.__lookup_state = 'ok';
+              try {
+                var _testProbe = _winCodeLookup.match('%%14592', 'value');
+                __e.__lookup_test = 'match("%%14592","value") = ' + JSON.stringify(_testProbe);
+              } catch (_probeErr) {
+                __e.__lookup_test = 'match probe threw: ' + String(_probeErr);
+              }
+            } else {
+              __e.__lookup_state = 'init-failed';
+              __e.__lookup_error = _lookupInitError || 'unknown';
+            }
+          }
+
+          function resolveWinCodes(node) {
+            if (node == null || _winCodeLookup == null) return node;
+            var t = typeof node;
+            if (t === 'string') {
+              // Fast pre-check: string starting with '%%' followed by digits only.
+              if (node.length >= 3 && node.charCodeAt(0) === 37 && node.charCodeAt(1) === 37) {
+                if (/^%%\d+$/.test(node)) {
+                  try {
+                    // Two-arg .match() returns the value from the 'value' column
+                    // (a string), or undefined/null when the code isn't in the CSV.
+                    var resolved = _winCodeLookup.match(node, 'value');
+                    if (typeof resolved === 'string' && resolved !== '') return resolved;
+                  } catch (_matchErr) { /* silent — leave the code unresolved */ }
+                }
+              }
+              return node;
+            }
+            if (t !== 'object') return node;
+            if (Array.isArray(node)) {
+              var arr = new Array(node.length);
+              for (var i = 0; i < node.length; i++) arr[i] = resolveWinCodes(node[i]);
+              return arr;
+            }
+            var result = {};
+            var keys = Object.keys(node);
+            for (var ki = 0; ki < keys.length; ki++) {
+              var k = keys[ki];
+              var v = node[k];
+              var resolved = resolveWinCodes(v);
+              result[k] = resolved;
+              // Optionally preserve the raw %%NNNN alongside the resolved value.
+              if (CFG.preserveWinCodes && typeof v === 'string' && v !== resolved &&
+                  v.length >= 3 && v.charCodeAt(0) === 37 && v.charCodeAt(1) === 37 &&
+                  /^%%\d+$/.test(v)) {
+                result[k + '_code'] = v;
+              }
+            }
+            return result;
+          }
+
+          // ---------------------------------------------------------------
+          // Helper: sanitize key names — replace spaces with underscores
+          // ---------------------------------------------------------------
+          function sKey(name) {
+            return typeof name === 'string' ? name.replace(/ /g, '_') : name;
+          }
+
+          // ---------------------------------------------------------------
+          // Helper: recursively clean parseWinEvent output
+          //   - Unwrap { _value: x } singletons to just x
+          //   - Unwrap { _value: x, Attr: y } to { value: x, Attr: y }
+          //   - Convert named Data arrays to { Name1: val, Name2: val }
+          //   - Strip xmlns noise
+          //   - Replace spaces in all key names with underscores
+          // ---------------------------------------------------------------
+          function clean(node) {
+            if (node == null) return undefined;
+            if (typeof node !== 'object') return node;
+
+            // --- Arrays ---
+            if (Array.isArray(node)) {
+              return node.map(clean).filter(function (x) { return x != null; });
+            }
+
+            // --- _value / #text unwrapping ---
+            var textKey = '_value' in node ? '_value' : ('#text' in node ? '#text' : null);
+            if (textKey) {
+              var keys = Object.keys(node);
+              var attrs = keys.filter(function (k) {
+                return k !== textKey && k !== 'xmlns' && node[k] != null && node[k] !== '';
+              });
+              if (attrs.length === 0) return node[textKey];
+              // Keep meaningful attributes alongside the text value
+              var out = {};
+              for (var ai = 0; ai < attrs.length; ai++) {
+                out[sKey(attrs[ai])] = clean(node[attrs[ai]]);
+              }
+              out.value = node[textKey];
+              return out;
+            }
+
+            // --- Regular object ---
+            var result = {};
+            var objKeys = Object.keys(node);
+            for (var i = 0; i < objKeys.length; i++) {
+              var k = objKeys[i];
+              var v = node[k];
+              if (k === 'xmlns') continue;
+
+              // Named Data array → flatten to key-value object
+              // e.g. [{Name:"User", _value:"admin"}, ...] → {User: "admin", ...}
+              if (k === 'Data' && Array.isArray(v) && v.length > 0 && v[0] && v[0].Name) {
+                for (var di = 0; di < v.length; di++) {
+                  var d = v[di];
+                  if (d && d.Name) {
+                    result[sKey(d.Name)] = d._value != null ? d._value : (d['#text'] != null ? d['#text'] : '');
+                  }
+                }
+                continue;
+              }
+
+              // Single named Data element (when XML has only one <Data Name="...">)
+              if (k === 'Data' && v && !Array.isArray(v) && typeof v === 'object' && v.Name) {
+                result[sKey(v.Name)] = v._value != null ? v._value : '';
+                continue;
+              }
+
+              // Data as an object with real keyed fields — this shape appears when
+              // parseWinEvent (or an upstream parser) has already flattened the
+              // <Data Name="X">val</Data> XML into a plain keyed dict, e.g.
+              //   EventData.Data = { ProcessId: "10584", Direction: "%%14592", ... }
+              // Without this branch, callers see EventData.Data.<X> in _raw and
+              // the TA's FIELDALIAS declarations (written against EventData.<X>)
+              // never match. Merge the child object's keys directly into the
+              // parent so the resulting shape matches the array-flattened branch
+              // above.
+              if (k === 'Data' && v && !Array.isArray(v) && typeof v === 'object' &&
+                  !v.Name && !('_value' in v) && !('#text' in v)) {
+                var dataKeys = Object.keys(v);
+                for (var mi = 0; mi < dataKeys.length; mi++) {
+                  var mk = dataKeys[mi];
+                  if (mk === 'xmlns') continue;
+                  var mv = clean(v[mk]);
+                  if (mv != null) result[sKey(mk)] = mv;
+                }
+                continue;
+              }
+
+              // Unnamed Data array — keep as array of values
+              if (k === 'Data' && Array.isArray(v) && v.length > 0 && v[0] && !v[0].Name) {
+                result.Data = v.map(function (d) {
+                  return d && d._value != null ? d._value : (d && d['#text'] != null ? d['#text'] : clean(d));
+                }).filter(function (x) { return x != null; });
+                continue;
+              }
+
+              var c = clean(v);
+              if (c != null) result[sKey(k)] = c;
+            }
+            return result;
+          }
+
+          // ---------------------------------------------------------------
+          // Helper: place the tokenized message object (and, when enabled, the
+          // original flat Message text) onto the parsed result.
+          // ---------------------------------------------------------------
+          function attachMessage(result, tokens, originalText) {
+            if (tokens == null) return;
+            var hasOriginal = CFG.keepOriginalMessage && typeof originalText === 'string' && originalText !== '';
+
+            if (!hasOriginal) {
+              result.Message = tokens;            // default / current behavior
+              return;
+            }
+
+            if (CFG.originalMessageMode === 'nested') {
+              // Message stays an object: existing Message.<subfield> paths are unchanged,
+              // the legacy text is added as a subfield.
+              tokens[sKey(CFG.originalMessageSubfield)] = originalText;
+              result.Message = tokens;
+              return;
+            }
+
+            // 'sibling' (default): Message is the legacy flat string, tokens move aside.
+            result.Message = originalText;
+            var tf = sKey(CFG.tokenizedMessageField);
+            if (tf && tf !== 'Message' && Object.keys(tokens).length > 0) result[tf] = tokens;
+          }
+
+          // ---------------------------------------------------------------
+          // Parse Classic rendered text format
+          //   Header: Key=Value lines
+          //   Message: _summary line optional; body may continue on same header value
+          //     (after CRLF) or on following physical lines.
+          //   Body lines: "Key: Value" (colon + whitespace/tab) or section "Name:" only.
+          //   All key names have spaces replaced with underscores.
+          // ---------------------------------------------------------------
+          function parseClassic(text) {
+            function messageBodyLine(msgRoot, line, st) {
+              var trimmed = (line || '').trim();
+              if (!trimmed) {
+                st.sectionKey = null;
+                return;
+              }
+              var colonIdx = trimmed.indexOf(':');
+              if (colonIdx > 0) {
+                var keyPart = trimmed.substring(0, colonIdx).trim();
+                var valPart = trimmed.substring(colonIdx + 1).trim();
+                if (valPart) {
+                  var fk = sKey(keyPart);
+                  if (st.sectionKey && msgRoot[st.sectionKey]) {
+                    msgRoot[st.sectionKey][fk] = valPart;
+                  } else {
+                    msgRoot[fk] = valPart;
+                  }
+                  return;
+                }
+                st.sectionKey = sKey(keyPart);
+                if (!msgRoot[st.sectionKey]) msgRoot[st.sectionKey] = {};
+                return;
+              }
+              if (st.sectionKey && msgRoot[st.sectionKey]) {
+                var existing = msgRoot[st.sectionKey]._description || '';
+                msgRoot[st.sectionKey]._description = existing ? existing + ' ' + trimmed : trimmed;
+              }
+            }
+
+            var result = {};
+            var lines = text.split(/\r?\n/);
+            var inMessage = false;
+            var msgState = { sectionKey: null };
+            var msgTokens = null;        // tokenized Message sub-fields
+            var msgOriginalParts = [];   // verbatim Message text (for backwards compatibility)
+
+            for (var i = 0; i < lines.length; i++) {
+              var line = lines[i];
+
+              if (!inMessage) {
+                // First line may be a standalone timestamp (no = sign)
+                if (i === 0 && line.indexOf('=') === -1 && line.trim()) {
+                  result._eventTime = line.trim();
+                  continue;
+                }
+                var eq = line.indexOf('=');
+                if (eq > 0) {
+                  var hk = sKey(line.substring(0, eq).trim());
+                  var hv = line.substring(eq + 1).trim();
+                  if (hk === 'Message') {
+                    var msgLines = hv.split(/\r?\n/);
+                    msgTokens = { _summary: (msgLines[0] || '').trim() };
+                    msgOriginalParts.push(hv);   // may already contain the whole body
+                    // Reserve key order position(s) so output field order stays stable
+                    result.Message = null;
+                    if (CFG.keepOriginalMessage && CFG.originalMessageMode !== 'nested') {
+                      var tfKey = sKey(CFG.tokenizedMessageField);
+                      if (tfKey && tfKey !== 'Message') result[tfKey] = null;
+                    }
+                    msgState.sectionKey = null;
+                    for (var j = 1; j < msgLines.length; j++) {
+                      messageBodyLine(msgTokens, msgLines[j], msgState);
+                    }
+                    // Body fully embedded in Message= value — do not consume following headers as message
+                    inMessage = msgLines.length <= 1;
+                  } else {
+                    result[hk] = hv;
+                  }
+                }
+              } else {
+                msgOriginalParts.push(line);   // keep the raw line verbatim
+                messageBodyLine(msgTokens, line, msgState);
+              }
+            }
+
+            // Assemble the verbatim message text and attach per configuration
+            var msgOriginal = msgOriginalParts.join('\n').replace(/\s+$/, '');
+            attachMessage(result, msgTokens, msgOriginal);
+            // Drop any unused order-reservation placeholders
+            if (result.Message == null) delete result.Message;
+            var tfClean = sKey(CFG.tokenizedMessageField);
+            if (tfClean && tfClean !== 'Message' && result[tfClean] == null) delete result[tfClean];
+            return result;
+          }
+
+          // ---------------------------------------------------------------
+          // Detect format and parse
+          //   XML  → starts with a `<?xml` prolog or a `<Event` root element
+          //          (anchored so a Classic body that merely mentions `<Event`
+          //          does not get misrouted through parseWinEvent)
+          //   else → Classic rendered text
+          // ---------------------------------------------------------------
+          //
+          // __e.__time_utc tracks whether the resolved _time is authoritatively
+          // in UTC (true for XML SystemTime, and for Classic strings that carry
+          // explicit tz info like `Z` or `+HH:MM`). The Auto Timestamp step's
+          // host_timezone lookup adjustment only fires when __time_utc is false,
+          // so already-UTC timestamps are never double-shifted.
+          // ---------------------------------------------------------------
+          var parsed;
+          __e.__time_utc = false;
+
+          if (/^<(\?xml|Event\b)/.test(raw)) {
+            // XML format (WEC/WEF/Sysmon/standard WinEventLog XML)
+            var xmlParsed = C.Text.parseWinEvent(raw, []);
+            if (!xmlParsed) throw new Error('parseWinEvent returned null');
+            parsed = clean(xmlParsed.Event || xmlParsed);
+
+            // Extract _time from System.TimeCreated (Windows XML SystemTime is
+            // always ISO-8601 UTC with a trailing Z)
+            if (parsed.System) {
+              var tc = parsed.System.TimeCreated;
+              if (tc) {
+                var ts = typeof tc === 'object' ? (tc.SystemTime || tc.value) : tc;
+                if (ts) {
+                  var xms = Date.parse(ts);
+                  if (!isNaN(xms)) {
+                    __e._time = xms / 1000;
+                    __e.__time_utc = true;
+                  }
+                }
+              }
+            }
+
+          } else {
+            // Classic rendered text format
+            parsed = parseClassic(raw);
+
+            // Extract _time from header timestamp. Mark __time_utc only when
+            // the source string carries an explicit UTC / tz offset — this
+            // lets the Auto Timestamp step apply the host-timezone lookup to
+            // truly naive timestamps without disturbing already-anchored ones.
+            var tf2 = parsed._eventTime || parsed.TimeGenerated;
+            if (tf2) {
+              var pts = Date.parse(tf2);
+              if (!isNaN(pts)) {
+                __e._time = pts / 1000;
+                __e.__time_utc = /(?:Z|[+\-]\d{2}:?\d{2})\s*$/.test(String(tf2));
+              }
+            }
+          }
+
+          // Align host with Windows computer name when present
+          var computerName = parsed.ComputerName;
+          if (!computerName && parsed.System && typeof parsed.System === 'object') {
+            computerName = parsed.System.Computer || parsed.System.ComputerName;
+          }
+          if (computerName) __e.host = computerName;
+
+          // Cribl Edge / non-Splunk inputs: source and sourcetype are usually unset. Derive channel
+          // from parsed XML or classic headers so Cribl_TA_windows [source::windows:json:...] applies.
+          var channel = null;
+          if (parsed.System && typeof parsed.System === 'object') {
+            channel = parsed.System.Channel || parsed.System.channel;
+          }
+          if (!channel) channel = parsed.LogName || parsed.Channel || parsed.channel;
+          if (!channel || String(channel).trim() === '') channel = 'Unknown';
+          // Collapse whitespace to underscores so downstream `source` values stay
+          // consistent with the pack's underscore-normalized key naming and don't
+          // introduce quoting/parsing quirks in Splunk source strings.
+          channel = String(channel).trim().replace(/\s+/g, '_');
+
+          var existingSrc = __e.source;
+          var hasSrc = existingSrc != null && String(existingSrc).trim() !== '';
+          var existingSt = __e.sourcetype;
+          var hasSt = existingSt != null && String(existingSt).trim() !== '';
+
+          if (!hasSt) __e.sourcetype = 'windows:json';
+          if (!hasSrc) __e.source = 'windows:json:' + channel;
+
+          // Resolve Windows message-file codes (%%NNNN) to their human-readable
+          // values. Emulates what the Splunk UF does at collection time. Enabled
+          // by default via CFG.resolveWinCodes; unknown codes pass through
+          // unchanged. See data/lookups/windows_msg_codes.csv for the table.
+          if (CFG.resolveWinCodes && _winCodeLookup != null) {
+            parsed = resolveWinCodes(parsed);
+            if (CFG.debugWinCodes) __e.__lookup_walker = 'ran';
+          } else if (CFG.debugWinCodes) {
+            __e.__lookup_walker = 'skipped (resolveWinCodes=' + CFG.resolveWinCodes +
+                                  ', lookup=' + (_winCodeLookup != null) + ')';
+          }
+
+          // Write nested JSON to _raw
+          __e._raw = JSON.stringify(parsed);
+
+        } catch (err) {
+          // Route unparseable events to a distinct sourcetype so operators can
+          // grep them out and they never quietly land under the healthy
+          // windows:json bucket. _raw is preserved so the original event is
+          // still recoverable for triage.
+          __e.cribl_code_error = String(err);
+          __e.sourcetype = 'windows:json:parse_error';
+          __e.__time_utc = false;
+        }
+    description: Parse Windows Event (XML or Classic text) to nested JSON
+  - id: lookup
+    filter: "true"
+    disabled: false
+    conf:
+      dbLookup: false
+      matchMode: regex
+      matchType: specific
+      reloadPeriodSec: -1
+      inFields:
+        - eventField: host
+          lookupField: host
+      addToEvent: false
+      ignoreCase: false
+      file: host_timezone.csv
+      outFields:
+        - eventField: __tz
+          lookupField: tz
+  - id: auto_timestamp
+    filter: "true"
+    disabled: false
+    conf:
+      srcField: _time
+      dstField: _time
+      defaultTimezone: utc
+      # Apply the host_timezone lookup shift only when __tz is set AND the
+      # Code function did not mark the timestamp as already authoritatively
+      # UTC (`__time_utc = true` for XML SystemTime and for Classic strings
+      # that carry an explicit tz offset). This eliminates the earlier bug
+      # where XML `_time` values were shifted by the host offset even though
+      # SystemTime is Z-anchored UTC.
+      timeExpression: "(__tz && !__time_utc) ? C.Time.adjustTZ(time.getTime(),
+        'UTC', __tz) / 1000 : time.getTime() / 1000"
+      offset: 0
+      maxLen: 150
+      defaultTime: now
+      latestDateAllowed: +1week
+      earliestDateAllowed: -420weeks
+      timestamps:
+        - regex: /(.*)/
+          strptime: "%s"
+    description: Use the correct "generated time" as the timestamp for the event.
+  - id: eval
+    filter: "true"
+    disabled: false
+    conf:
+      printUndefineds: false
+      add:
+        # Sourcetype: always land on `windows:json`, EXCEPT preserve the
+        # parse_error variant set by the Code function's catch block so bad
+        # events don't get silently rebucketed to the healthy sourcetype.
+        - disabled: false
+          name: sourcetype
+          value: "(sourcetype === 'windows:json:parse_error') ? sourcetype :
+            'windows:json'"
+        # Source: normalize any upstream WinEventLog / XmlWinEventLog / legacy
+        # json:windows prefix to `windows:json:<Channel>`; already-correct
+        # `windows:json:*` sources are left alone.
+        - disabled: false
+          name: source
+          value: "(source != null && source !== '' && source.startsWith('WinEventLog:')) ?
+            `windows:json:${source.replace(/^WinEventLog:/, '')}` : (source !=
+            null && source !== '' && source.startsWith('XmlWinEventLog:')) ?
+            `windows:json:${source.replace(/^XmlWinEventLog:/, '')}` : (source
+            != null && source !== '' && source.startsWith('json:windows:')) ?
+            `windows:json:${source.replace(/^json:windows:/, '')}` : (source !=
+            null && source !== '' && source.startsWith('windows:json:')) ?
+            source : (source != null && source !== '') ?
+            `windows:json:${source}` : 'windows:json:Unknown'"
+      remove: []
+description: ""

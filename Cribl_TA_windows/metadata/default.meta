@@ -1,0 +1,6 @@
+##
+## Global permissions: app accessible to all users, objects exported system-wide
+##
+[]
+export = system
+access = read : [ * ], write : [ admin, sc_admin, power ]
