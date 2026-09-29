@@ -1,0 +1,18 @@
+windows_ocsf_xml:
+  sampleName: windows_ocsf_xml.json
+  description: Anonymized Windows XML events (Security, Sysmon, System, PowerShell) covering the main OCSF classes (auth, account, group, process, network, DNS, file, registry, module, task, service, log clear, script)
+  tags: [windows, xml, ocsf]
+  isPackOnly: true
+  packId: windows_events_to_nested_json
+  size: 28370
+  numEvents: 22
+  created: 0
+windows_ocsf_classic:
+  sampleName: windows_ocsf_classic.json
+  description: Anonymized Windows Classic rendered-text Security events (4624, 4625, 4688, 4776) for the OCSF pipeline
+  tags: [windows, classic, ocsf]
+  isPackOnly: true
+  packId: windows_events_to_nested_json
+  size: 3867
+  numEvents: 4
+  created: 0
