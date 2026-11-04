@@ -1,0 +1,71 @@
+ocsfOutputMode:
+  type: string
+  lib: custom
+  label: OCSF output mode
+  value: "'raw'"
+  description: "Windows_Events_to_OCSF output shape. 'raw' = OCSF JSON in _raw (Splunk, S3 JSON, HTTP). 'fields' = OCSF attributes as top-level fields, _raw removed (Parquet, Amazon Security Lake, Cribl Lake)."
+  tags: ocsf
+ocsfIncludeUnmapped:
+  type: boolean
+  lib: custom
+  label: OCSF include unmapped
+  value: "true"
+  description: Keep the full Windows EventData and leftover System fields in the OCSF unmapped object so no source data is lost.
+  tags: ocsf
+ocsfIncludeRawData:
+  type: boolean
+  lib: custom
+  label: OCSF include raw_data
+  value: "false"
+  description: Copy the original Windows event text into the OCSF raw_data attribute (roughly doubles event size).
+  tags: ocsf
+# Windows_Events_to_Nested_JSON settings (values = the Code function defaults)
+keepOriginalMessage:
+  type: boolean
+  lib: custom
+  label: Keep original Message string
+  value: "false"
+  description: Windows_Events_to_Nested_JSON - also keep the legacy rendered Message string next to the tokenized Message object.
+  tags: nested-json
+originalMessageMode:
+  type: string
+  lib: custom
+  label: Original Message mode
+  value: "'sibling'"
+  description: "Windows_Events_to_Nested_JSON - where the kept Message string goes when keepOriginalMessage is true: 'sibling' or 'nested'."
+  tags: nested-json
+tokenizedMessageField:
+  type: string
+  lib: custom
+  label: Tokenized Message field
+  value: "'Message_fields'"
+  description: Windows_Events_to_Nested_JSON - field name for the tokenized Message in sibling mode.
+  tags: nested-json
+originalMessageSubfield:
+  type: string
+  lib: custom
+  label: Original Message subfield
+  value: "'_message'"
+  description: Windows_Events_to_Nested_JSON - subfield name for the original Message string in nested mode.
+  tags: nested-json
+resolveWinCodes:
+  type: boolean
+  lib: custom
+  label: Resolve %%NNNN codes
+  value: "true"
+  description: Both pipelines - resolve Windows %%NNNN message-file codes to text using windows_msg_codes.csv.
+  tags: nested-json, ocsf
+preserveWinCodes:
+  type: boolean
+  lib: custom
+  label: Preserve %%NNNN codes
+  value: "false"
+  description: Windows_Events_to_Nested_JSON - keep the raw %%NNNN value as <field>_code next to the resolved text.
+  tags: nested-json
+debugWinCodes:
+  type: boolean
+  lib: custom
+  label: Debug %%NNNN lookup
+  value: "false"
+  description: Windows_Events_to_Nested_JSON - emit __lookup_* hidden fields for troubleshooting (preview only).
+  tags: nested-json

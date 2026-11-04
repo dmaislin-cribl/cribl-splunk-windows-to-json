@@ -4,10 +4,21 @@ Corrective actions taken against the findings in `REVIEW.md`, plus one follow-up
 
 | Artifact | Original | Interim (never shipped) | Current |
 |---|---|---|---|
-| Cribl Pack (`windows_events_to_nested_json`) | 0.0.3 | 0.0.4 – 0.0.17 | **0.0.19** |
-| Splunk TA (`Cribl_TA_windows`) | 0.0.1 | 0.0.2, 0.0.5 – 0.0.17 | **0.0.19** |
+| Cribl Pack (`windows_events_to_nested_json`) | 0.0.3 | 0.0.4 – 0.0.17 | **0.0.20** |
+| Splunk TA (`Cribl_TA_windows`) | 0.0.1 | 0.0.2, 0.0.5 – 0.0.17 | **0.0.20** |
 
-## 0.0.19 (this release) — classic-event CIM gaps closed
+## 0.0.20 (this release) — merged `Windows_Events_to_OCSF` pipeline
+
+Merged the `feature/ocsf-pipeline` branch from [simondev65/cribl-splunk-windows-to-json](https://github.com/simondev65/cribl-splunk-windows-to-json/tree/feature/ocsf-pipeline), which added a new `Windows_Events_to_OCSF` pipeline mapping Windows XML/Classic events to OCSF 1.4.0 across 17 classes, reusing the same parser logic as `Windows_Events_to_Nested_JSON`. That branch forked before the 0.0.19 fixes below existed, so two things were verified and fixed during the merge rather than ported blindly:
+
+- **Verification.** Extracted the actual OCSF Code function and ran it (with a stubbed Cribl API) against all 26 shipped anonymized samples (22 XML, 4 Classic) before touching anything — zero exceptions, every event produced a plausible `class_uid`/`type_name` matching the contributor's documented mapping table.
+- **Fix 1 — ported the 0.0.19 multi-line `Message` fix** into the OCSF pipeline's own embedded copy of `parseClassic()`/`messageBodyLine()` (it's a separate copy, not a shared import — Cribl pipelines can't reference another pipeline's Code function), so a Classic 4672 gets the same complete `Privileges` list the nested-JSON pipeline now gets.
+- **Fix 2 — that alone broke it differently.** `classicToEventData()`'s section-detection check (`v && typeof v === 'object'`) also matches arrays, since arrays are `typeof 'object'` in JS. A multi-line field promoted to an array was being misread as a nested `Subject:`-style section and its values scattered into numeric keys (`ed["0"]`, `ed["1"]`, ...) instead of landing on `PrivilegeList`. Added an explicit `!Array.isArray(v)` guard, plus a `privilegeList()` helper so both a Classic array and an XML whitespace-joined string resolve to the same `privileges` output.
+- **Verification again.** Re-ran all 26 samples (byte-identical results — zero regressions) plus a 12-privilege Classic 4672 built from the real event that originally surfaced the 0.0.19 bug: `privileges` now has all 12 entries, including `SeDebugPrivilege` and `SeImpersonatePrivilege`, instead of 0.
+
+Also merged: `default/vars.yml` (promotes the pack's existing Code-function override vars, plus three new `ocsf*` vars, to proper pack-level Global Variables with UI labels), `default/samples.yml` + `data/samples/*.json` (the 26 anonymized samples), the new disabled-by-default `windows_ocsf` route, and `id`/version/description/streamtag updates to `pack.yml` and `package.json`. TA bumped to 0.0.20 in lockstep — no TA-side functional change; OCSF output (`sourcetype=ocsf`) is a separate consumer path from the TA's `windows:json` CIM mapping.
+
+## 0.0.19 — classic-event CIM gaps closed
 
 Found by replaying a real customer export (a Cribl Stream capture of classic-rendered Security-channel events: 4688, 4776, 4793, 4670, 4673, 4672, 4627, 4624, 4798) through the actual pack parser and cross-checking the resulting field paths against every FIELDALIAS/EVAL chain in the paired TA's `props.conf`. Two confirmed defects, both fixed:
 

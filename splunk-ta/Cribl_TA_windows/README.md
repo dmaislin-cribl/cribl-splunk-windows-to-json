@@ -4,12 +4,14 @@
 
 | Component | Version |
 |-----------|---------|
-| **Splunk app** (`default/app.conf`, `app.manifest`) | **0.0.19** |
-| **Cribl pack** (`windows_events_to_json` / `cribl_pack/...`) | **0.0.19** |
+| **Splunk app** (`default/app.conf`, `app.manifest`) | **0.0.20** |
+| **Cribl pack** (`windows_events_to_json` / `cribl_pack/...`) | **0.0.20** |
 
 The TA and its paired Cribl pack share a single version number from 0.0.5 onward so operators can talk about a single delivery without disambiguation.
 
 ## Changelog
+
+**0.0.20** — Lockstep version bump only; no TA-side changes. The paired pack added a new `Windows_Events_to_OCSF` pipeline (contributed by [simondev65](https://github.com/simondev65/cribl-splunk-windows-to-json/tree/feature/ocsf-pipeline)) mapping Windows events to OCSF 1.4.0, with two correctness fixes applied during merge so its parser carries the 0.0.19 multi-line-`Message` fix. OCSF output (`sourcetype=ocsf`) is a separate consumer path from this TA's `windows:json` CIM mapping — nothing here changes. See the pack's own changelog (0.0.20) for detail.
 
 **0.0.19** — `user`/`user_name`/`src_user` now resolve for plain `Subject:` events; paired pack fix for dropped multi-line `Message` values
 

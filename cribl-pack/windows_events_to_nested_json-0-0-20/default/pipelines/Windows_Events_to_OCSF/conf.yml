@@ -1,0 +1,1495 @@
+output: default
+streamtags: []
+groups: {}
+asyncFuncTimeout: 1000
+functions:
+  - id: comment
+    filter: "true"
+    conf:
+      comment: |-
+        Windows Events to OCSF 1.4.0
+
+        Same XML / Classic parser as Windows_Events_to_Nested_JSON, then maps each event to an
+        OCSF 1.4.0 class: Authentication, Account Change, Group Management, Process, Network,
+        DNS, File System, Registry (win), Windows Service (win), Scheduled Job, Module, Kernel
+        Extension, Event Log, Script. Unmapped event IDs become Base Event (class_uid 0).
+
+        ocsfOutputMode 'raw' (default): _raw = OCSF JSON, sourcetype=ocsf.
+        ocsfOutputMode 'fields': OCSF attributes as top-level fields (Parquet / Security Lake).
+        Full EventData is kept in unmapped. Parse failures: sourcetype=ocsf:parse_error.
+        Mapping table: README "OCSF pipeline".
+    description: Pipeline overview
+  - id: code
+    filter: "true"
+    disabled: false
+    conf:
+      maxNumOfIterations: 5000
+      activeLogSampleRate: 1
+      useUniqueLogChannel: false
+      code: |-
+        // Windows Events to OCSF 1.4.0 — Universal Parser + OCSF Mapper
+        // Parses XML (WEC/WEF/Sysmon/Edge) and Classic rendered text exactly like the
+        // Windows_Events_to_Nested_JSON pipeline, then maps the result to an OCSF
+        // 1.4.0 event class. The OCSF object is left in __ocsf; the "Emit OCSF" Code
+        // function further down writes it out once _time is final.
+        //
+        // Two stages:
+        //   1. PARSE     — parseWinEvent/clean() or parseClassic(), %%NNNN resolution
+        //                  (same logic as the nested-JSON pipeline).
+        //   2. NORMALIZE — Classic Message sections are translated to the XML
+        //                  EventData names (Subject.Account_Name -> SubjectUserName,
+        //                  New_Logon.Security_ID -> TargetUserSid, ...), so a single
+        //                  mapping table serves both formats.
+        //   3. MAP       — Event ID -> OCSF class/activity; per-class builders fill
+        //                  the class attributes. Anything not explicitly mapped goes
+        //                  to Base Event (class_uid 0). Nothing is dropped: the full
+        //                  EventData lands in unmapped.EventData.
+        //
+        // Class coverage (OCSF 1.4.0, Windows extension "win" uid 2 where noted):
+        //   3002 Authentication         4624 4625 4634 4647 4648 4768 4769 4770 4771
+        //                               4772 4773 4776 4778 4779
+        //   3001 Account Change         4720 4722 4723 4724 4725 4726 4738 4740 4741
+        //                               4742 4743 4767 4781
+        //   3006 Group Management       4727-4737 4744-4763
+        //   3005 User Access Mgmt       4704 4705
+        //   3003 Authorize Session      4672
+        //   1007 Process Activity       4688 4689, Sysmon 1 5 8 10 25
+        //   4001 Network Activity       5152 5154 5155 5156 5157 5158 5159, Sysmon 3
+        //   4003 DNS Activity           Sysmon 22
+        //   1001 File System Activity   4656 4663 4670 (ObjectType File), Sysmon 2 11 15 23 26
+        //   1005 Module Activity        Sysmon 7
+        //   1002 Kernel Extension       Sysmon 6
+        //   1006 Scheduled Job          4698 4699 4700 4701 4702
+        //   1008 Event Log Activity     1100 1102 (Security), 104 (System)
+        //   1009 Script Activity        PowerShell 4104
+        //   201001 Registry Key (win)   4656 4663 4670 (ObjectType Key), Sysmon 12 14
+        //   201002 Registry Value (win) 4657, Sysmon 12 (DeleteValue) 13
+        //   201004 Windows Service (win) 4697, 7045, 7040
+        //   0    Base Event             everything else
+        //
+        // Settings (pack variables, see default/vars.yml):
+        //   ocsfIncludeUnmapped (Boolean) default true  — keep EventData/System leftovers in unmapped
+        //   ocsfIncludeRawData  (Boolean) default false — copy the original _raw into raw_data
+        //   resolveWinCodes     (Boolean) default true  — resolve %%NNNN message-file codes
+
+        try {
+          const raw = (__e._raw || '').trim();
+
+          // ---------------------------------------------------------------
+          // Configuration (with optional Variable overrides)
+          // ---------------------------------------------------------------
+          var CFG = {
+            resolveWinCodes: true,
+            includeUnmapped: true,
+            includeRawData: false
+          };
+          function boolVar(v, dflt) {
+            if (v === undefined || v === null || v === '') return dflt;
+            return v === true || String(v).toLowerCase() === 'true';
+          }
+          try {
+            if (typeof C !== 'undefined' && C && C.vars) {
+              CFG.resolveWinCodes = boolVar(C.vars.resolveWinCodes, CFG.resolveWinCodes);
+              CFG.includeUnmapped = boolVar(C.vars.ocsfIncludeUnmapped, CFG.includeUnmapped);
+              CFG.includeRawData = boolVar(C.vars.ocsfIncludeRawData, CFG.includeRawData);
+            }
+          } catch (cfgErr) { /* Variables unavailable — use defaults */ }
+
+          // ===============================================================
+          // STAGE 1 — PARSE (same logic as Windows_Events_to_Nested_JSON)
+          // ===============================================================
+
+          // Windows message-code (%%NNNN) resolution via data/lookups/windows_msg_codes.csv.
+          // C.Lookup is a factory (no `new`); two-arg .match() returns the column value.
+          var _winCodeLookup = null;
+          if (CFG.resolveWinCodes) {
+            try { _winCodeLookup = C.Lookup('windows_msg_codes.csv', 'code', ['value']); }
+            catch (lookupErr) { _winCodeLookup = null; }
+          }
+
+          function resolveWinCodes(node) {
+            if (node == null || _winCodeLookup == null) return node;
+            var t = typeof node;
+            if (t === 'string') {
+              if (node.length >= 3 && node.charCodeAt(0) === 37 && node.charCodeAt(1) === 37 && /^%%\d+$/.test(node)) {
+                try {
+                  var resolved = _winCodeLookup.match(node, 'value');
+                  if (typeof resolved === 'string' && resolved !== '') return resolved;
+                } catch (_matchErr) { /* leave the code unresolved */ }
+              }
+              return node;
+            }
+            if (t !== 'object') return node;
+            if (Array.isArray(node)) {
+              var arr = new Array(node.length);
+              for (var i = 0; i < node.length; i++) arr[i] = resolveWinCodes(node[i]);
+              return arr;
+            }
+            var result = {};
+            var keys = Object.keys(node);
+            for (var ki = 0; ki < keys.length; ki++) result[keys[ki]] = resolveWinCodes(node[keys[ki]]);
+            return result;
+          }
+
+          // Sanitize key names — replace spaces with underscores
+          function sKey(name) {
+            return typeof name === 'string' ? name.replace(/ /g, '_') : name;
+          }
+
+          // Recursively clean parseWinEvent output (unwrap _value/#text, flatten
+          // named Data arrays/objects, strip xmlns, normalize key names).
+          function clean(node) {
+            if (node == null) return undefined;
+            if (typeof node !== 'object') return node;
+            if (Array.isArray(node)) {
+              return node.map(clean).filter(function (x) { return x != null; });
+            }
+            var textKey = '_value' in node ? '_value' : ('#text' in node ? '#text' : null);
+            if (textKey) {
+              var keys = Object.keys(node);
+              var attrs = keys.filter(function (k) {
+                return k !== textKey && k !== 'xmlns' && node[k] != null && node[k] !== '';
+              });
+              if (attrs.length === 0) return node[textKey];
+              var out = {};
+              for (var ai = 0; ai < attrs.length; ai++) out[sKey(attrs[ai])] = clean(node[attrs[ai]]);
+              out.value = node[textKey];
+              return out;
+            }
+            var result = {};
+            var objKeys = Object.keys(node);
+            for (var i = 0; i < objKeys.length; i++) {
+              var k = objKeys[i];
+              var v = node[k];
+              if (k === 'xmlns') continue;
+              // Named Data array → { Name1: val, Name2: val }
+              if (k === 'Data' && Array.isArray(v) && v.length > 0 && v[0] && v[0].Name) {
+                for (var di = 0; di < v.length; di++) {
+                  var d = v[di];
+                  if (d && d.Name) {
+                    result[sKey(d.Name)] = d._value != null ? d._value : (d['#text'] != null ? d['#text'] : '');
+                  }
+                }
+                continue;
+              }
+              // Single named Data element
+              if (k === 'Data' && v && !Array.isArray(v) && typeof v === 'object' && v.Name) {
+                result[sKey(v.Name)] = v._value != null ? v._value : '';
+                continue;
+              }
+              // Data already flattened to a keyed object → merge into parent
+              if (k === 'Data' && v && !Array.isArray(v) && typeof v === 'object' &&
+                  !v.Name && !('_value' in v) && !('#text' in v)) {
+                var dataKeys = Object.keys(v);
+                for (var mi = 0; mi < dataKeys.length; mi++) {
+                  var mk = dataKeys[mi];
+                  if (mk === 'xmlns') continue;
+                  var mv = clean(v[mk]);
+                  if (mv != null) result[sKey(mk)] = mv;
+                }
+                continue;
+              }
+              // Unnamed Data array — keep as array of values
+              if (k === 'Data' && Array.isArray(v) && v.length > 0 && v[0] && !v[0].Name) {
+                result.Data = v.map(function (d) {
+                  return d && d._value != null ? d._value : (d && d['#text'] != null ? d['#text'] : clean(d));
+                }).filter(function (x) { return x != null; });
+                continue;
+              }
+              var c = clean(v);
+              if (c != null) result[sKey(k)] = c;
+            }
+            return result;
+          }
+
+          // Parse Classic rendered text: Key=Value headers + tokenized Message body.
+          function parseClassic(text) {
+            function messageBodyLine(msgRoot, line, st) {
+              var trimmed = (line || '').trim();
+              if (!trimmed) { st.sectionKey = null; st.lastKey = null; return; }
+              var colonIdx = trimmed.indexOf(':');
+              if (colonIdx > 0) {
+                var keyPart = trimmed.substring(0, colonIdx).trim();
+                var valPart = trimmed.substring(colonIdx + 1).trim();
+                if (valPart) {
+                  var fk = sKey(keyPart);
+                  var target = (st.sectionKey && msgRoot[st.sectionKey]) ? msgRoot[st.sectionKey] : msgRoot;
+                  target[fk] = valPart;
+                  st.lastKey = { obj: target, key: fk };
+                  return;
+                }
+                st.sectionKey = sKey(keyPart);
+                if (!msgRoot[st.sectionKey]) msgRoot[st.sectionKey] = {};
+                st.lastKey = null;
+                return;
+              }
+              // Continuation line (no colon): extends the most recently set value
+              // into a multivalue array (e.g. 4672/4673 "Privileges:", 4663
+              // "Accesses:" — only the first entry shares the "Key:" line).
+              if (st.lastKey) {
+                var cur = st.lastKey.obj[st.lastKey.key];
+                st.lastKey.obj[st.lastKey.key] = Array.isArray(cur) ? cur.concat(trimmed) : [cur, trimmed];
+                return;
+              }
+              if (st.sectionKey && msgRoot[st.sectionKey]) {
+                var existing = msgRoot[st.sectionKey]._description || '';
+                msgRoot[st.sectionKey]._description = existing ? existing + ' ' + trimmed : trimmed;
+              }
+            }
+
+            var result = {};
+            var lines = text.split(/\r?\n/);
+            var inMessage = false;
+            var msgState = { sectionKey: null };
+            var msgTokens = null;
+            for (var i = 0; i < lines.length; i++) {
+              var line = lines[i];
+              if (!inMessage) {
+                if (i === 0 && line.indexOf('=') === -1 && line.trim()) {
+                  result._eventTime = line.trim();
+                  continue;
+                }
+                var eq = line.indexOf('=');
+                if (eq > 0) {
+                  var hk = sKey(line.substring(0, eq).trim());
+                  var hv = line.substring(eq + 1).trim();
+                  if (hk === 'Message') {
+                    var msgLines = hv.split(/\r?\n/);
+                    msgTokens = { _summary: (msgLines[0] || '').trim() };
+                    msgState.sectionKey = null;
+                    for (var j = 1; j < msgLines.length; j++) messageBodyLine(msgTokens, msgLines[j], msgState);
+                    inMessage = msgLines.length <= 1;
+                  } else {
+                    result[hk] = hv;
+                  }
+                }
+              } else {
+                messageBodyLine(msgTokens, line, msgState);
+              }
+            }
+            if (msgTokens) result.Message = msgTokens;
+            return result;
+          }
+
+          // Detect format and parse (anchored XML detection, as in the nested-JSON pipeline).
+          // __time_utc marks _time as authoritatively UTC so the host_timezone shift is skipped.
+          var parsed;
+          var isXml = /^<(\?xml|Event\b)/.test(raw);
+          __e.__time_utc = false;
+
+          if (isXml) {
+            var xmlParsed = C.Text.parseWinEvent(raw, []);
+            if (!xmlParsed) throw new Error('parseWinEvent returned null');
+            parsed = clean(xmlParsed.Event || xmlParsed);
+            if (parsed.System) {
+              var tc = parsed.System.TimeCreated;
+              if (tc) {
+                var ts = typeof tc === 'object' ? (tc.SystemTime || tc.value) : tc;
+                if (ts) {
+                  var xms = Date.parse(ts);
+                  if (!isNaN(xms)) { __e._time = xms / 1000; __e.__time_utc = true; }
+                }
+              }
+            }
+          } else {
+            parsed = parseClassic(raw);
+            var tf2 = parsed._eventTime || parsed.TimeGenerated;
+            if (tf2) {
+              var pts = Date.parse(tf2);
+              if (!isNaN(pts)) {
+                __e._time = pts / 1000;
+                __e.__time_utc = /(?:Z|[+\-]\d{2}:?\d{2})\s*$/.test(String(tf2));
+              }
+            }
+          }
+
+          if (CFG.resolveWinCodes && _winCodeLookup != null) parsed = resolveWinCodes(parsed);
+
+          // ===============================================================
+          // STAGE 2 — NORMALIZE (one System header + one EventData shape)
+          // ===============================================================
+
+          // Value helpers. Windows uses '-' / '' / NULL SID for "not applicable".
+          function nv(x) {
+            if (x == null) return null;
+            if (typeof x === 'object') { if (Array.isArray(x)) return null; x = x.value; if (x == null) return null; }
+            var s = String(x).trim();
+            return (s === '' || s === '-' || s === 'N/A' || s === '(null)' || s === 'S-1-0-0' || s === 'NULL SID') ? null : s;
+          }
+          // PrivilegeList: XML/UF-rendered text is one whitespace-joined string;
+          // the Classic parser's continuation-line handling yields an array when
+          // a "Privileges:" list spans multiple lines. Accept either shape.
+          function privilegeList(x) {
+            if (Array.isArray(x)) return x.map(function (v) { return String(v).trim(); }).filter(Boolean);
+            var s = nv(x);
+            return s ? s.split(/\s+/).filter(Boolean) : [];
+          }
+          function num(x) {
+            var s = nv(x);
+            if (s == null) return null;
+            var n = /^0x[0-9a-f]+$/i.test(s) ? parseInt(s, 16) : (/^-?\d+$/.test(s) ? parseInt(s, 10) : NaN);
+            return isNaN(n) ? null : n;
+          }
+          function first() {
+            for (var i = 0; i < arguments.length; i++) { var v = nv(arguments[i]); if (v != null) return v; }
+            return null;
+          }
+          function msTime(x) {
+            var s = nv(x);
+            if (s == null) return null;
+            // Sysmon UtcTime is "YYYY-MM-DD HH:MM:SS.mmm" in UTC with no zone marker
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) s = s.replace(' ', 'T') + 'Z';
+            var t = Date.parse(s);
+            return isNaN(t) ? null : t;
+          }
+
+          var S = {};     // normalized System header
+          var ED = {};    // normalized EventData (XML names)
+          var SYS_REST = {};
+
+          // Classic → XML EventData name translation.
+          // Section roles: identity fields inside these sections belong to a principal.
+          var CLASSIC_ROLE = {
+            Subject: 'S', Creator_Subject: 'S',
+            New_Logon: 'T', Account_For_Which_Logon_Failed: 'T', Target_Subject: 'T',
+            Account_Whose_Credentials_Were_Used: 'T', Target_Account: 'T', New_Account: 'T',
+            Account_That_Was_Locked_Out: 'T', Account_Information: 'T', Logon_Account: 'T',
+            Member: 'M',
+            Group: 'G', New_Group: 'G', Changed_Group: 'G', Deleted_Group: 'G'
+          };
+          var ROLE_KEYS = {
+            S: { Security_ID: 'SubjectUserSid', Account_Name: 'SubjectUserName', Account_Domain: 'SubjectDomainName', Logon_ID: 'SubjectLogonId' },
+            T: { Security_ID: 'TargetUserSid', User_ID: 'TargetUserSid', Account_Name: 'TargetUserName', Account_Domain: 'TargetDomainName',
+                 Supplied_Realm_Name: 'TargetDomainName', Logon_ID: 'TargetLogonId', Logon_GUID: 'TargetLogonGuid',
+                 Linked_Logon_ID: 'TargetLinkedLogonId', Network_Account_Name: 'TargetOutboundUserName',
+                 Network_Account_Domain: 'TargetOutboundDomainName', Old_Account_Name: 'OldTargetUserName', New_Account_Name: 'NewTargetUserName' },
+            M: { Security_ID: 'MemberSid', Account_Name: 'MemberName' },
+            G: { Security_ID: 'TargetSid', Group_Name: 'TargetUserName', Group_Domain: 'TargetDomainName',
+                 Account_Name: 'TargetUserName', Account_Domain: 'TargetDomainName' }
+          };
+          var CLASSIC_KEYS = {
+            Logon_Type: 'LogonType', Restricted_Admin_Mode: 'RestrictedAdminMode', Virtual_Account: 'VirtualAccount',
+            Elevated_Token: 'ElevatedToken', Impersonation_Level: 'ImpersonationLevel',
+            Workstation_Name: 'WorkstationName', Source_Network_Address: 'IpAddress', Network_Address: 'IpAddress',
+            Client_Address: 'IpAddress', Source_Port: 'IpPort', Port: 'IpPort', Client_Port: 'IpPort',
+            Process_ID: 'ProcessId', Process_Name: 'ProcessName', Caller_Process_ID: 'ProcessId', Caller_Process_Name: 'ProcessName', New_Process_ID: 'NewProcessId', New_Process_Name: 'NewProcessName',
+            Creator_Process_ID: 'ProcessId', Creator_Process_Name: 'ParentProcessName', Process_Command_Line: 'CommandLine',
+            Token_Elevation_Type: 'TokenElevationType', Mandatory_Label: 'MandatoryLabel', Exit_Status: 'Status',
+            Logon_Process: 'LogonProcessName', Authentication_Package: 'AuthenticationPackageName',
+            Transited_Services: 'TransmittedServices', 'Package_Name_(NTLM_only)': 'LmPackageName', Key_Length: 'KeyLength',
+            Failure_Reason: 'FailureReason', Status: 'Status', Sub_Status: 'SubStatus', Failure_Code: 'Status', Result_Code: 'Status',
+            Error_Code: 'Status', Source_Workstation: 'Workstation', Logon_Account: 'TargetUserName',
+            Service_Name: 'ServiceName', Service_ID: 'ServiceSid', Service_File_Name: 'ServiceFileName', Service_Type: 'ServiceType',
+            Service_Start_Type: 'ServiceStartType', Service_Account: 'ServiceAccount',
+            Ticket_Options: 'TicketOptions', Ticket_Encryption_Type: 'TicketEncryptionType', 'Pre-Authentication_Type': 'PreAuthType',
+            Task_Name: 'TaskName', Task_Content: 'TaskContent', Task_New_Content: 'TaskContentNew',
+            Object_Server: 'ObjectServer', Object_Type: 'ObjectType', Object_Name: 'ObjectName', Handle_ID: 'HandleId',
+            Accesses: 'AccessList', Access_Mask: 'AccessMask', Object_Value_Name: 'ObjectValueName', Operation_Type: 'OperationType',
+            Old_Value_Type: 'OldValueType', Old_Value: 'OldValue', New_Value_Type: 'NewValueType', New_Value: 'NewValue',
+            Privileges: 'PrivilegeList', Session_Name: 'SessionName', Client_Name: 'ClientName',
+            Target_Server_Name: 'TargetServerName', Additional_Information: 'TargetInfo', Caller_Computer_Name: 'CallerComputerName',
+            Application_Name: 'Application', Direction: 'Direction', Source_Address: 'SourceAddress',
+            Destination_Address: 'DestAddress', Destination_Port: 'DestPort', Protocol: 'Protocol',
+            'Filter_Run-Time_ID': 'FilterRTID', Layer_Name: 'LayerName', 'Layer_Run-Time_ID': 'LayerRTID'
+          };
+          // WFP (515x) uses "Source Port" for the local port, not the logon client port
+          var WFP_KEYS = { Source_Port: 'SourcePort', Process_ID: 'ProcessID' };
+
+          function classicToEventData(msg, eventId) {
+            var ed = {};
+            if (!msg || typeof msg !== 'object') return ed;
+            var wfp = eventId >= 5150 && eventId <= 5159;
+            function put(k, v) { if (ed[k] === undefined) ed[k] = v; }
+            function mapKey(k) { return (wfp && WFP_KEYS[k]) || CLASSIC_KEYS[k] || k; }
+            var mk = Object.keys(msg);
+            for (var i = 0; i < mk.length; i++) {
+              var k = mk[i];
+              if (k === '_summary') continue;
+              var v = msg[k];
+              if (v && typeof v === 'object' && !Array.isArray(v)) {
+                var role = CLASSIC_ROLE[k];
+                var sk = Object.keys(v);
+                for (var j = 0; j < sk.length; j++) {
+                  if (sk[j] === '_description') continue;
+                  var tgt = (role && ROLE_KEYS[role][sk[j]]) || mapKey(sk[j]);
+                  put(tgt, v[sk[j]]);
+                  if (role === 'T' && sk[j] === 'Security_ID') put('TargetSid', v[sk[j]]);
+                }
+              } else {
+                put(mapKey(k), v);
+              }
+            }
+            return ed;
+          }
+
+          var CLASSIC_LEVEL = { critical: 1, error: 2, warning: 3, information: 4, verbose: 5, 'audit success': 0, 'audit failure': 0 };
+
+          if (isXml) {
+            var sys = parsed.System || {};
+            var prov = sys.Provider;
+            S.provider = nv(prov && typeof prov === 'object' ? (prov.Name || prov.EventSourceName) : prov);
+            S.eventId = num(sys.EventID);
+            S.level = num(sys.Level);
+            S.keywords = nv(sys.Keywords);
+            var tcx = sys.TimeCreated;
+            S.timeCreated = nv(tcx && typeof tcx === 'object' ? (tcx.SystemTime || tcx.value) : tcx);
+            S.recordId = nv(sys.EventRecordID);
+            S.channel = nv(sys.Channel);
+            S.computer = nv(sys.Computer);
+            S.correlation = sys.Correlation && typeof sys.Correlation === 'object' ? nv(sys.Correlation.ActivityID) : null;
+            S.pid = sys.Execution && typeof sys.Execution === 'object' ? num(sys.Execution.ProcessID) : null;
+            S.tid = sys.Execution && typeof sys.Execution === 'object' ? num(sys.Execution.ThreadID) : null;
+            S.userSid = sys.Security && typeof sys.Security === 'object' ? nv(sys.Security.UserID) : null;
+            var ri = parsed.RenderingInfo && typeof parsed.RenderingInfo === 'object' ? parsed.RenderingInfo : {};
+            S.message = nv(ri.Message);
+            S.levelName = nv(ri.Level);
+            SYS_REST = { Version: sys.Version, Task: nv(ri.Task) || sys.Task, Opcode: nv(ri.Opcode) || sys.Opcode, Keywords: sys.Keywords,
+                         ProcessID: S.pid, ThreadID: S.tid, UserID: S.userSid, ActivityID: S.correlation };
+            // EventData, or the single child of UserData (e.g. UserData.LogFileCleared for 1102/104)
+            var edSrc = parsed.EventData;
+            if (edSrc == null && parsed.UserData && typeof parsed.UserData === 'object') {
+              var uk = Object.keys(parsed.UserData);
+              if (uk.length) edSrc = parsed.UserData[uk[0]];
+            }
+            ED = edSrc && typeof edSrc === 'object' && !Array.isArray(edSrc) ? edSrc : (edSrc != null ? { Data: edSrc } : {});
+          } else {
+            // Classic SourceName is the legacy display name; use the ETW provider name so metadata matches XML
+            var CLASSIC_PROVIDERS = { 'microsoft windows security auditing.': 'Microsoft-Windows-Security-Auditing',
+                                      'microsoft-windows-security-auditing': 'Microsoft-Windows-Security-Auditing',
+                                      'microsoft-windows-eventlog': 'Microsoft-Windows-Eventlog' };
+            S.provider = CLASSIC_PROVIDERS[String(parsed.SourceName || '').toLowerCase()] || nv(parsed.SourceName);
+            S.eventId = num(parsed.EventCode || parsed.EventID);
+            var ctype = String(parsed.Type || '').toLowerCase();
+            S.level = CLASSIC_LEVEL[ctype] !== undefined ? CLASSIC_LEVEL[ctype] : null;
+            S.levelName = nv(parsed.Type);
+            S.keywords = nv(parsed.Keywords) || (ctype.indexOf('audit') === 0 ? parsed.Type : null);
+            S.timeCreated = nv(parsed._eventTime || parsed.TimeGenerated);
+            S.recordId = nv(parsed.RecordNumber);
+            S.channel = nv(parsed.LogName);
+            S.computer = nv(parsed.ComputerName);
+            S.userSid = nv(parsed.Sid);
+            S.message = parsed.Message && typeof parsed.Message === 'object' ? nv(parsed.Message._summary) : nv(parsed.Message);
+            SYS_REST = { Task: parsed.TaskCategory, Opcode: parsed.OpCode, Keywords: parsed.Keywords, EventType: parsed.EventType,
+                         User: parsed.User, SidType: parsed.SidType };
+            ED = classicToEventData(parsed.Message, S.eventId);
+          }
+
+          // Align host with the Windows computer name (same as the nested-JSON pipeline)
+          if (S.computer) __e.host = S.computer;
+
+          var chan = String(S.channel || '').toLowerCase();
+          var provLc = String(S.provider || '').toLowerCase();
+          var isSysmon = provLc === 'microsoft-windows-sysmon' || chan === 'microsoft-windows-sysmon/operational';
+          var isSecurity = chan === 'security';
+          var id = S.eventId;
+          if (id == null) throw new Error('No EventID / EventCode found - not a Windows event');
+
+          // ===============================================================
+          // STAGE 3 — MAP TO OCSF 1.4.0
+          // ===============================================================
+
+          var OCSF_VERSION = '1.4.0';
+          var CLASSES = {
+            0: ['Base Event', 0, 'Uncategorized'],
+            1001: ['File System Activity', 1, 'System Activity'],
+            1002: ['Kernel Extension Activity', 1, 'System Activity'],
+            1005: ['Module Activity', 1, 'System Activity'],
+            1006: ['Scheduled Job Activity', 1, 'System Activity'],
+            1007: ['Process Activity', 1, 'System Activity'],
+            1008: ['Event Log Activity', 1, 'System Activity'],
+            1009: ['Script Activity', 1, 'System Activity'],
+            3001: ['Account Change', 3, 'Identity & Access Management'],
+            3002: ['Authentication', 3, 'Identity & Access Management'],
+            3003: ['Authorize Session', 3, 'Identity & Access Management'],
+            3005: ['User Access Management', 3, 'Identity & Access Management'],
+            3006: ['Group Management', 3, 'Identity & Access Management'],
+            4001: ['Network Activity', 4, 'Network Activity'],
+            4003: ['DNS Activity', 4, 'Network Activity'],
+            201001: ['Registry Key Activity', 1, 'System Activity'],
+            201002: ['Registry Value Activity', 1, 'System Activity'],
+            201004: ['Windows Service Activity', 1, 'System Activity']
+          };
+          var STATUS_NAMES = { 0: 'Unknown', 1: 'Success', 2: 'Failure', 99: 'Other' };
+          var SEVERITY_NAMES = { 0: 'Unknown', 1: 'Informational', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Critical', 6: 'Fatal', 99: 'Other' };
+          var WIN_LEVEL_NAMES = { 0: 'LogAlways', 1: 'Critical', 2: 'Error', 3: 'Warning', 4: 'Information', 5: 'Verbose' };
+
+          // ---------- object builders ----------
+          function basename(p) { var s = nv(p); if (s == null) return null; var m = s.split(/[\\\/]/); return m[m.length - 1] || null; }
+          function dirname(p) { var s = nv(p); if (s == null) return null; var i = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/')); return i > 0 ? s.substring(0, i) : null; }
+          function cleanIp(ip) {
+            var s = nv(ip);
+            if (s == null) return null;
+            s = s.replace(/^::ffff:/i, '').replace(/^\[|\]$/g, '');
+            return /^[0-9a-f.:%]+$/i.test(s) && /[.:]/.test(s) ? s : null;
+          }
+          function port(p) { var n = num(p); return n != null && n > 0 && n < 65536 ? n : null; }
+
+          // Well-known SIDs → OCSF user.type_id (0 Unknown, 1 User, 2 Admin, 3 System, 99 Other)
+          function userType(sid, name) {
+            var s = nv(sid) || '';
+            if (/^S-1-5-(18|19|20)$/.test(s) || /^S-1-5-(80|90|96)-/.test(s)) return [3, 'System'];
+            if (/^S-1-5-21-.*-500$/.test(s)) return [2, 'Admin'];
+            var n = nv(name) || '';
+            if (/\$$/.test(n)) return [99, 'Computer'];
+            if (/^S-1-5-21-/.test(s)) return [1, 'User'];
+            return null;
+          }
+          // user(name, domain, sid). Accepts "DOMAIN\user" and "user@realm" names.
+          function user(name, domain, sid) {
+            var n = nv(name), d = nv(domain), u = nv(sid);
+            if (n && n.indexOf('\\') > 0 && !d) { d = n.substring(0, n.indexOf('\\')); n = n.substring(n.indexOf('\\') + 1); }
+            if (n && /^S-1-\d+(-\d+)+$/.test(n) && !u) { u = n; n = null; }
+            // Kerberos "user@REALM" where the realm is the domain → name + domain
+            var at = n ? n.lastIndexOf('@') : -1;
+            if (at > 0 && (!d || d.toUpperCase() === n.substring(at + 1).toUpperCase())) { d = n.substring(at + 1); n = n.substring(0, at); }
+            if (!n && !u) return null;
+            var o = { name: n, domain: d, uid: u };
+            var t = userType(u, n);
+            if (t) { o.type_id = t[0]; o.type = t[1]; }
+            return o;
+          }
+          function subjectUser() { return user(ED.SubjectUserName, ED.SubjectDomainName, ED.SubjectUserSid); }
+          function targetUser() { return user(ED.TargetUserName, ED.TargetDomainName, first(ED.TargetUserSid, ED.TargetSid)); }
+
+          var HASH_ALGOS = { MD5: [1, 'MD5'], SHA1: [2, 'SHA-1'], SHA256: [3, 'SHA-256'], SHA512: [4, 'SHA-512'], IMPHASH: [99, 'IMPHASH'] };
+          function hashes(h) {
+            var s = nv(h);
+            if (s == null) return null;
+            var out = [];
+            var parts = s.split(',');
+            for (var i = 0; i < parts.length; i++) {
+              var kv = parts[i].split('=');
+              if (kv.length !== 2) continue;
+              var a = HASH_ALGOS[kv[0].trim().toUpperCase()];
+              var val = kv[1].trim();
+              if (!val) continue;
+              out.push(a ? { algorithm_id: a[0], algorithm: a[1], value: val } : { algorithm_id: 99, algorithm: kv[0].trim(), value: val });
+            }
+            return out.length ? out : null;
+          }
+          function file(path, extra) {
+            var p = nv(path);
+            if (p == null) return null;
+            var f = { name: basename(p), path: p, parent_folder: dirname(p), type_id: 1, type: 'Regular File' };
+            if (extra) for (var k in extra) f[k] = extra[k];
+            return f;
+          }
+          // PE metadata that Sysmon adds to process / image-load events
+          function peFile(path, prefix) {
+            prefix = prefix || '';
+            var f = file(path, {
+              hashes: hashes(ED[prefix + 'Hashes']),
+              company_name: nv(ED[prefix + 'Company']),
+              desc: nv(ED[prefix + 'Description']),
+              version: nv(ED[prefix + 'FileVersion']),
+              product: nv(ED[prefix + 'Product']) ? { name: nv(ED[prefix + 'Product']), vendor_name: nv(ED[prefix + 'Company']) } : null
+            });
+            var signed = nv(ED.Signed);
+            if (f && signed && signed.toLowerCase() === 'true') {
+              var st = nv(ED.SignatureStatus);
+              var sid = { valid: 1, expired: 2, revoked: 3 }[String(st || '').toLowerCase()];
+              f.signature = { algorithm_id: 4, algorithm: 'Authenticode', state_id: sid || (st ? 99 : 0), state: st || 'Unknown' };
+            }
+            return f;
+          }
+          function integrity(label) {
+            var s = nv(label);
+            if (s == null) return null;
+            var BY_SID = { 'S-1-16-0': 1, 'S-1-16-4096': 2, 'S-1-16-8192': 3, 'S-1-16-8448': 3, 'S-1-16-12288': 4, 'S-1-16-16384': 5, 'S-1-16-20480': 6 };
+            var BY_NAME = { untrusted: 1, low: 2, medium: 3, mediumplus: 3, high: 4, system: 5, protected: 6, appcontainer: 2 };
+            var i = BY_SID[s.toUpperCase()] || BY_NAME[s.toLowerCase().replace(/\s|_/g, '')];
+            // Classic renders the label as "Mandatory Label\High Mandatory Level"
+            var lm = !i && /(untrusted|low|medium|high|system|protected)\s+mandatory\s+level/i.exec(s);
+            if (lm) i = BY_NAME[lm[1].toLowerCase()];
+            var NAMES = { 1: 'Untrusted', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'System', 6: 'Protected' };
+            return i ? [i, NAMES[i]] : [99, s];
+          }
+          // process(pid, path, extra) — pid may be hex (Security log) or decimal (Sysmon)
+          function proc(pid, path, extra) {
+            var n = num(pid);
+            var pth = nv(path);
+            // PID 0 is Windows' "no process" placeholder (e.g. 4625 network logons)
+            var p = { pid: n === 0 && !pth ? null : n, name: basename(pth), file: pth && /[\\\/]/.test(pth) ? file(pth) : null };
+            if (extra) for (var k in extra) p[k] = extra[k];
+            if (p.pid == null && nv(p.uid) == null) {
+              // OCSF Process requires pid or uid; without either, drop the object
+              return null;
+            }
+            return p;
+          }
+          function withIntegrity(p, label) {
+            var it = integrity(label);
+            if (p && it) { p.integrity_id = it[0]; p.integrity = it[1]; }
+            return p;
+          }
+          // Logon IDs: lowercase so XML (0x3e7) and Classic (0x3E7) correlate; 0x0 means "no session"
+          function lid(x) { var s = nv(x); if (s == null) return null; s = s.toLowerCase(); return /^0x0+$/.test(s) ? null : s; }
+          function guid(g) { var s = nv(g); return s ? s.replace(/^\{|\}$/g, '').toLowerCase() : null; }
+          function endpoint(ip, prt, hostname, extra) {
+            var e = { ip: cleanIp(ip), port: port(prt), hostname: nv(hostname) };
+            if (extra) for (var k in extra) e[k] = extra[k];
+            return e;
+          }
+          function isLoopback(ip) { return ip != null && (/^127\./.test(ip) || ip === '::1'); }
+
+          var IANA_PROTO = { 1: 'icmp', 2: 'igmp', 6: 'tcp', 17: 'udp', 41: 'ipv6', 47: 'gre', 50: 'esp', 51: 'ah', 58: 'ipv6-icmp', 132: 'sctp' };
+          var PROTO_NUM = { icmp: 1, igmp: 2, tcp: 6, udp: 17, gre: 47, esp: 50, ah: 51, 'ipv6-icmp': 58, icmpv6: 58, sctp: 132 };
+
+          // NTSTATUS (4625 / 4776) and Kerberos (4768-4773) result codes → text
+          var NTSTATUS = {
+            '0xc0000064': 'User name does not exist', '0xc000006a': 'Bad password', '0xc000006d': 'Bad user name or password',
+            '0xc000006e': 'Account restriction', '0xc000006f': 'Logon outside authorized hours', '0xc0000070': 'Unauthorized workstation',
+            '0xc0000071': 'Password expired', '0xc0000072': 'Account disabled', '0xc0000133': 'Clock skew between DC and host',
+            '0xc000015b': 'Logon type not granted', '0xc000018c': 'Trust relationship failed', '0xc0000192': 'Netlogon service not started',
+            '0xc0000193': 'Account expired', '0xc0000224': 'Password must change at next logon', '0xc0000225': 'Windows bug (not a risk)',
+            '0xc0000234': 'Account locked out', '0xc00002ee': 'Error during logon', '0xc0000413': 'Authentication firewall: machine not allowed',
+            '0xc0000371': 'Local account store does not contain secret material'
+          };
+          var KERB_STATUS = {
+            '0x0': 'Success', '0x6': 'Client not found in Kerberos database', '0x7': 'Server not found in Kerberos database',
+            '0xc': 'Requested start time is later than end time (policy restriction)', '0xd': 'KDC cannot accommodate requested option',
+            '0xe': 'KDC has no support for encryption type', '0xf': 'KDC has no support for checksum type',
+            '0x10': 'KDC has no support for PADATA type', '0x12': 'Client credentials revoked (disabled, expired or locked out)',
+            '0x17': 'Password has expired', '0x18': 'Pre-authentication failed (bad password)', '0x1b': 'Server requires user-to-user authentication',
+            '0x1f': 'Integrity check on decrypted field failed', '0x20': 'Ticket expired', '0x25': 'Clock skew too great',
+            '0x29': 'Message stream modified', '0x3c': 'Generic error'
+          };
+          function hexLc(x) { var s = nv(x); if (s == null) return null; var n = num(s); return n == null ? s.toLowerCase() : '0x' + n.toString(16); }
+
+          // LogonType (Windows) → OCSF logon_type_id. Windows 0 (System) is OCSF 1.
+          var LOGON_TYPES = {
+            0: [1, 'System'], 2: [2, 'Interactive'], 3: [3, 'Network'], 4: [4, 'Batch'], 5: [5, 'OS Service'], 7: [7, 'Unlock'],
+            8: [8, 'Network Cleartext'], 9: [9, 'New Credentials'], 10: [10, 'Remote Interactive'], 11: [11, 'Cached Interactive'],
+            12: [12, 'Cached Remote Interactive'], 13: [13, 'Cached Unlock']
+          };
+          var REMOTE_LOGON = { 3: true, 8: true, 10: true, 12: true };
+
+          // Human-readable summaries used when the event carries no rendered message
+          var MSG = {
+            1100: 'The event logging service has shut down.', 1102: 'The audit log was cleared.', 104: 'The event log was cleared.',
+            4624: 'An account was successfully logged on.', 4625: 'An account failed to log on.', 4634: 'An account was logged off.',
+            4647: 'User initiated logoff.', 4648: 'A logon was attempted using explicit credentials.',
+            4656: 'A handle to an object was requested.', 4657: 'A registry value was modified.', 4663: 'An attempt was made to access an object.',
+            4670: 'Permissions on an object were changed.', 4672: 'Special privileges assigned to new logon.',
+            4688: 'A new process has been created.', 4689: 'A process has exited.', 4697: 'A service was installed in the system.',
+            4698: 'A scheduled task was created.', 4699: 'A scheduled task was deleted.', 4700: 'A scheduled task was enabled.',
+            4701: 'A scheduled task was disabled.', 4702: 'A scheduled task was updated.',
+            4704: 'A user right was assigned.', 4705: 'A user right was removed.',
+            4720: 'A user account was created.', 4722: 'A user account was enabled.', 4723: "An attempt was made to change an account's password.",
+            4724: "An attempt was made to reset an account's password.", 4725: 'A user account was disabled.', 4726: 'A user account was deleted.',
+            4738: 'A user account was changed.', 4740: 'A user account was locked out.', 4741: 'A computer account was created.',
+            4742: 'A computer account was changed.', 4743: 'A computer account was deleted.', 4767: 'A user account was unlocked.',
+            4781: 'The name of an account was changed.',
+            4768: 'A Kerberos authentication ticket (TGT) was requested.', 4769: 'A Kerberos service ticket was requested.',
+            4770: 'A Kerberos service ticket was renewed.', 4771: 'Kerberos pre-authentication failed.',
+            4772: 'A Kerberos authentication ticket request failed.', 4773: 'A Kerberos service ticket request failed.',
+            4776: 'The computer attempted to validate the credentials for an account.',
+            4778: 'A session was reconnected to a Window Station.', 4779: 'A session was disconnected from a Window Station.',
+            5152: 'The Windows Filtering Platform has blocked a packet.', 5154: 'The Windows Filtering Platform has permitted an application or service to listen on a port for incoming connections.',
+            5155: 'The Windows Filtering Platform has blocked an application or service from listening on a port for incoming connections.',
+            5156: 'The Windows Filtering Platform has permitted a connection.', 5157: 'The Windows Filtering Platform has blocked a connection.',
+            5158: 'The Windows Filtering Platform has permitted a bind to a local port.', 5159: 'The Windows Filtering Platform has blocked a bind to a local port.',
+            7040: 'The start type of a service was changed.', 7045: 'A service was installed in the system.'
+          };
+          var SYSMON_MSG = {
+            1: 'Process Create', 2: 'File creation time changed', 3: 'Network connection detected', 5: 'Process terminated',
+            6: 'Driver loaded', 7: 'Image loaded', 8: 'CreateRemoteThread detected', 10: 'Process accessed', 11: 'File created',
+            12: 'Registry object added or deleted', 13: 'Registry value set', 14: 'Registry object renamed',
+            15: 'File stream created', 22: 'Dns query', 23: 'File Delete archived', 25: 'Process Tampering', 26: 'File Delete logged'
+          };
+
+          // ---------- OCSF event skeleton ----------
+          var o = {};
+          var profiles = ['host'];
+          var extension = null;
+          function setClass(uid, activityId, activityName) {
+            var c = CLASSES[uid];
+            o.class_uid = uid; o.class_name = c[0];
+            o.category_uid = c[1]; o.category_name = c[2];
+            o.activity_id = activityId; o.activity_name = activityName;
+            o.type_uid = uid * 100 + activityId;
+            // OCSF: for activity 99 keep the source value in activity_name; type_name uses the enum caption
+            o.type_name = c[0] + ': ' + (activityId === 99 ? 'Other' : activityName);
+            if (uid > 200000 && uid < 300000) extension = { name: 'win', uid: '2', version: OCSF_VERSION };
+          }
+          function setStatus(sid, code, detail) {
+            o.status_id = sid; o.status = STATUS_NAMES[sid];
+            if (nv(code) != null) o.status_code = String(nv(code));
+            if (nv(detail) != null) o.status_detail = String(nv(detail));
+          }
+          function setAction(actionId, dispositionId) {
+            var A = { 0: 'Unknown', 1: 'Allowed', 2: 'Denied', 3: 'Observed', 4: 'Modified', 99: 'Other' };
+            var D = { 0: 'Unknown', 1: 'Allowed', 2: 'Blocked', 6: 'Dropped', 17: 'Logged', 99: 'Other' };
+            o.action_id = actionId; o.action = A[actionId];
+            if (dispositionId != null) { o.disposition_id = dispositionId; o.disposition = D[dispositionId]; }
+            if (profiles.indexOf('security_control') < 0) profiles.push('security_control');
+          }
+          function actor(u, p, sessionUid) {
+            var a = { user: u || null, process: p || null, session: lid(sessionUid) ? { uid: lid(sessionUid) } : null };
+            if (a.user || a.process || a.session) o.actor = a;
+          }
+          // Audit success / failure from Keywords (0x8020… = success, 0x8010… = failure)
+          function auditOutcome() {
+            var k = String(S.keywords || '').toLowerCase();
+            if (k.indexOf('audit failure') >= 0) return 2;
+            if (k.indexOf('audit success') >= 0) return 1;
+            var m = /^0x([0-9a-f]+)$/.exec(k);
+            if (m) {
+              var h = ('0000000000000000' + m[1]).slice(-16);
+              var nib = parseInt(h.charAt(2), 16);
+              if (nib & 1) return 2;
+              if (nib & 2) return 1;
+            }
+            return null;
+          }
+
+          // ---------- class builders ----------
+
+          function mapAuthentication() {
+            var ACT = { 4624: [1, 'Logon'], 4625: [1, 'Logon'], 4648: [1, 'Logon'], 4778: [1, 'Logon'],
+                        4634: [2, 'Logoff'], 4647: [2, 'Logoff'], 4779: [2, 'Logoff'],
+                        4768: [3, 'Authentication Ticket'], 4772: [3, 'Authentication Ticket'],
+                        4769: [4, 'Service Ticket Request'], 4773: [4, 'Service Ticket Request'],
+                        4770: [5, 'Service Ticket Renew'], 4771: [6, 'Preauth'], 4776: [99, 'Credential Validation'] };
+            var a = ACT[id];
+            setClass(3002, a[0], a[1]);
+            var kerberos = id >= 4768 && id <= 4773;
+
+            // user = the account being authenticated; actor = the requesting subject/process
+            if (id === 4776) o.user = user(ED.TargetUserName);
+            else if (id === 4778 || id === 4779) o.user = user(first(ED.AccountName, ED.SubjectUserName), first(ED.AccountDomain, ED.SubjectDomainName));
+            else o.user = targetUser();
+            if (!o.user) o.user = subjectUser();
+            if (id === 4634 || id === 4647) o.user = subjectUser() || targetUser();
+
+            var subj = (id === 4634 || id === 4647) ? null : subjectUser();
+            actor(subj, proc(first(ED.ProcessId, ED.ProcessID), ED.ProcessName), subj ? ED.SubjectLogonId : null);
+
+            // Logon type
+            var lt = num(ED.LogonType);
+            if (lt != null) {
+              var L = LOGON_TYPES[lt] || [99, String(lt)];
+              o.logon_type_id = L[0]; o.logon_type = L[1];
+              o.is_remote = !!REMOTE_LOGON[lt];
+              if (lt === 8) o.is_cleartext = true;
+            }
+
+            // Protocol: Kerberos events are Kerberos; 4776 and MSV1_0 are NTLM
+            var pkg = String(first(ED.AuthenticationPackageName, ED.PackageName) || '');
+            var lm = String(nv(ED.LmPackageName) || '');
+            if (kerberos || /^kerberos$/i.test(pkg)) { o.auth_protocol_id = 2; o.auth_protocol = 'Kerberos'; }
+            else if (id === 4776 || /ntlm|msv1_0|microsoft_authentication_package_v1_0/i.test(pkg) || /^ntlm/i.test(lm)) {
+              o.auth_protocol_id = 1; o.auth_protocol = 'NTLM';
+            } else if (pkg) { o.auth_protocol_id = 99; o.auth_protocol = pkg; }
+
+            // Session (the new / closed logon session)
+            var sessUid = id === 4778 || id === 4779 ? lid(first(ED.LogonID, ED.SubjectLogonId))
+                        : (id === 4634 || id === 4647) ? lid(first(ED.TargetLogonId, ED.SubjectLogonId)) : lid(ED.TargetLogonId);
+            if (sessUid || nv(ED.TargetLogonGuid) || nv(ED.LogonGuid)) {
+              o.session = { uid: sessUid, uuid: guid(first(ED.TargetLogonGuid, ED.LogonGuid)), is_remote: o.is_remote,
+                            terminal: nv(ED.SessionName) };
+              if (o.session.uuid === '00000000-0000-0000-0000-000000000000') o.session.uuid = null;
+            }
+
+            // Source (where the logon came from) and destination (this host / the target service)
+            var srcHost = id === 4776 ? nv(ED.Workstation) : first(ED.WorkstationName, ED.ClientName);
+            o.src_endpoint = endpoint(first(ED.IpAddress, ED.ClientAddress), ED.IpPort, srcHost);
+            if (o.is_remote === undefined && o.src_endpoint.ip && !isLoopback(o.src_endpoint.ip)) o.is_remote = true;
+            o.dst_endpoint = endpoint(null, null, id === 4648 ? first(ED.TargetServerName, S.computer) : S.computer);
+            if (id === 4648 && /^localhost$/i.test(o.dst_endpoint.hostname || '')) o.dst_endpoint.hostname = S.computer;
+            if (kerberos || id === 4648) {
+              var svcName = first(ED.ServiceName, id === 4648 ? ED.TargetInfo : null);
+              if (svcName) o.service = { name: svcName, uid: nv(ED.ServiceSid) };
+            }
+
+            // Outcome
+            if (id === 4625) {
+              var sub = hexLc(ED.SubStatus), st = hexLc(ED.Status);
+              var code = sub && sub !== '0x0' ? sub : st;
+              setStatus(2, code, first(ED.FailureReason, NTSTATUS[code]));
+            } else if (id === 4776) {
+              var c6 = hexLc(ED.Status);
+              if (c6 === '0x0' || c6 == null) setStatus(1, c6);
+              else setStatus(2, c6, NTSTATUS[c6]);
+            } else if (kerberos) {
+              var kc = hexLc(ED.Status);
+              if (id === 4771 || id === 4772 || id === 4773 || (kc && kc !== '0x0')) setStatus(2, kc, KERB_STATUS[kc]);
+              else setStatus(1, kc);
+            } else {
+              var ao = auditOutcome();
+              setStatus(ao || 1);
+            }
+          }
+
+          function mapAccountChange() {
+            var ACT = { 4720: [1, 'Create'], 4741: [1, 'Create'], 4722: [2, 'Enable'], 4723: [3, 'Password Change'],
+                        4724: [4, 'Password Reset'], 4725: [5, 'Disable'], 4726: [6, 'Delete'], 4743: [6, 'Delete'],
+                        4740: [9, 'Lock'], 4767: [12, 'Unlock'],
+                        4738: [99, 'Account Modified'], 4742: [99, 'Account Modified'], 4781: [99, 'Account Renamed'] };
+            var a = ACT[id];
+            setClass(3001, a[0], a[1]);
+            if (id === 4740) {
+              // 4740 stores the *caller computer* in TargetDomainName — it is not the account's domain
+              o.user = user(ED.TargetUserName, null, first(ED.TargetSid, ED.TargetUserSid));
+              var caller = first(ED.CallerComputerName, ED.TargetDomainName);
+              if (caller) o.src_endpoint = endpoint(null, null, caller);
+            } else if (id === 4781) {
+              o.user = user(ED.OldTargetUserName, ED.TargetDomainName, first(ED.TargetSid, ED.TargetUserSid));
+              o.user_result = user(ED.NewTargetUserName, ED.TargetDomainName, first(ED.TargetSid, ED.TargetUserSid));
+            } else {
+              o.user = targetUser();
+              if (o.user && nv(ED.DisplayName)) o.user.full_name = nv(ED.DisplayName);
+              if (o.user && (id === 4741 || id === 4742 || id === 4743)) { o.user.type_id = 99; o.user.type = 'Computer'; }
+            }
+            if (!o.user) o.user = user(null, null, S.userSid) || { name: 'Unknown' };
+            var subj = subjectUser();
+            actor(subj, null, ED.SubjectLogonId);
+            setStatus(auditOutcome() || 1);
+          }
+
+          function mapGroupManagement() {
+            var CREATE = [4727, 4731, 4744, 4749, 4754, 4759], ADD = [4728, 4732, 4746, 4751, 4756, 4761],
+                REMOVE = [4729, 4733, 4747, 4752, 4757, 4762], DEL = [4730, 4734, 4748, 4753, 4758, 4763];
+            var a = CREATE.indexOf(id) >= 0 ? [6, 'Create'] : ADD.indexOf(id) >= 0 ? [3, 'Add User']
+                  : REMOVE.indexOf(id) >= 0 ? [4, 'Remove User'] : DEL.indexOf(id) >= 0 ? [5, 'Delete'] : [99, 'Group Modified'];
+            setClass(3006, a[0], a[1]);
+            var scope = (id >= 4727 && id <= 4730) || id === 4737 ? 'Security Enabled Global Group'
+                      : (id >= 4731 && id <= 4735) ? 'Security Enabled Local Group'
+                      : (id >= 4754 && id <= 4758) ? 'Security Enabled Universal Group'
+                      : (id >= 4744 && id <= 4748) ? 'Security Disabled Local Group'
+                      : (id >= 4749 && id <= 4753) ? 'Security Disabled Global Group'
+                      : (id >= 4759 && id <= 4763) ? 'Security Disabled Universal Group' : null;
+            o.group = { name: nv(ED.TargetUserName), domain: nv(ED.TargetDomainName), uid: first(ED.TargetSid, ED.TargetUserSid), type: scope };
+            if (!o.group.name && !o.group.uid) o.group.name = 'Unknown';
+            // Member DN "CN=Jane Doe,OU=Users,DC=corp,DC=example" → name "Jane Doe" (full DN stays in unmapped)
+            var mn = nv(ED.MemberName);
+            var cn = mn ? /^CN=((?:\\,|[^,])+)/i.exec(mn) : null;
+            var mu = user(cn ? cn[1].replace(/\\,/g, ',') : mn, null, ED.MemberSid);
+            if (mu) o.user = mu;
+            var pl = privilegeList(ED.PrivilegeList);
+            if (pl.length) o.privileges = pl;
+            actor(subjectUser(), null, ED.SubjectLogonId);
+            setStatus(auditOutcome() || 1);
+          }
+
+          function mapUserAccess() {
+            setClass(3005, id === 4704 ? 1 : 2, id === 4704 ? 'Assign Privileges' : 'Revoke Privileges');
+            o.user = user(null, null, first(ED.TargetSid, ED.TargetUserSid)) || targetUser() || { name: 'Unknown' };
+            o.privileges = privilegeList(ED.PrivilegeList);
+            actor(subjectUser(), null, ED.SubjectLogonId);
+            setStatus(auditOutcome() || 1);
+          }
+
+          function mapAuthorizeSession() {
+            setClass(3003, 1, 'Assign Privileges');
+            o.user = subjectUser() || { name: 'Unknown' };
+            o.privileges = privilegeList(ED.PrivilegeList);
+            if (lid(ED.SubjectLogonId)) o.session = { uid: lid(ED.SubjectLogonId) };
+            o.dst_endpoint = endpoint(null, null, S.computer);
+            setStatus(auditOutcome() || 1);
+          }
+
+          function mapProcess() {
+            if (isSysmon) {
+              if (id === 1) {
+                setClass(1007, 1, 'Launch');
+                var parent = proc(ED.ParentProcessId, ED.ParentImage, {
+                  uid: guid(ED.ParentProcessGuid), cmd_line: nv(ED.ParentCommandLine), user: user(ED.ParentUser) });
+                o.process = withIntegrity(proc(ED.ProcessId, ED.Image, {
+                  uid: guid(ED.ProcessGuid), cmd_line: nv(ED.CommandLine), working_directory: nv(ED.CurrentDirectory),
+                  user: user(ED.User), created_time: msTime(ED.UtcTime), parent_process: parent,
+                  session: lid(ED.LogonId) || guid(ED.LogonGuid) ? { uid: lid(ED.LogonId), uuid: guid(ED.LogonGuid) } : null
+                }), ED.IntegrityLevel);
+                if (o.process) o.process.file = peFile(ED.Image);
+                actor(parent ? parent.user : null, parent, null);
+              } else if (id === 5) {
+                setClass(1007, 2, 'Terminate');
+                o.process = proc(ED.ProcessId, ED.Image, { uid: guid(ED.ProcessGuid), user: user(ED.User), terminated_time: msTime(ED.UtcTime) });
+              } else if (id === 8 || id === 10 || id === 25) {
+                if (id === 8) setClass(1007, 4, 'Inject');
+                else if (id === 10) setClass(1007, 3, 'Open');
+                else setClass(1007, 99, 'Process Tampering');
+                var src = proc(ED.SourceProcessId, ED.SourceImage, { uid: guid(ED.SourceProcessGuid), user: user(ED.SourceUser) });
+                o.process = id === 25
+                  ? proc(ED.ProcessId, ED.Image, { uid: guid(ED.ProcessGuid), user: user(ED.User) })
+                  : proc(ED.TargetProcessId, ED.TargetImage, { uid: guid(ED.TargetProcessGuid), user: user(ED.TargetUser) });
+                if (id === 8) {
+                  o.injection_type_id = 1; o.injection_type = 'Remote Thread';
+                  if (nv(ED.StartModule) || nv(ED.StartAddress)) {
+                    o.module = { file: file(ED.StartModule), start_address: nv(ED.StartAddress), function_name: nv(ED.StartFunction),
+                                 load_type_id: 0, load_type: 'Unknown' };
+                  }
+                }
+                if (id === 10 && num(ED.GrantedAccess) != null) o.actual_permissions = num(ED.GrantedAccess);
+                if (src) actor(src.user, src, null);
+              }
+            } else if (id === 4688) {
+              setClass(1007, 1, 'Launch');
+              var parent2 = proc(ED.ProcessId, ED.ParentProcessName);
+              // 4688 v2 carries the new process' own token in Target*; older versions only Subject*
+              var tu = targetUser();
+              o.process = withIntegrity(proc(ED.NewProcessId, ED.NewProcessName, {
+                cmd_line: nv(ED.CommandLine), user: tu || subjectUser(), parent_process: parent2,
+                session: lid(ED.TargetLogonId) || lid(ED.SubjectLogonId) ? { uid: lid(ED.TargetLogonId) || lid(ED.SubjectLogonId) } : null
+              }), ED.MandatoryLabel);
+              actor(subjectUser(), parent2, ED.SubjectLogonId);
+            } else if (id === 4689) {
+              setClass(1007, 2, 'Terminate');
+              o.process = proc(ED.ProcessId, ED.ProcessName, { user: subjectUser() });
+              if (num(ED.Status) != null) o.exit_code = num(ED.Status);
+              actor(subjectUser(), null, ED.SubjectLogonId);
+            }
+            if (!o.process) o.process = { pid: -1, name: 'Unknown' };
+            if (!isSysmon) setStatus(auditOutcome() || 1);
+          }
+
+          function mapNetwork() {
+            var conn = {};
+            if (isSysmon) {
+              setClass(4001, 1, 'Open');
+              var initiated = String(nv(ED.Initiated) || '').toLowerCase() === 'true';
+              // Sysmon reports the initiator as Source; Initiated says whether that was this host
+              o.src_endpoint = endpoint(ED.SourceIp, ED.SourcePort, ED.SourceHostname, { svc_name: nv(ED.SourcePortName) });
+              o.dst_endpoint = endpoint(ED.DestinationIp, ED.DestinationPort, ED.DestinationHostname, { svc_name: nv(ED.DestinationPortName) });
+              conn.direction_id = initiated ? 2 : 1; conn.direction = initiated ? 'Outbound' : 'Inbound';
+              var pn = String(nv(ED.Protocol) || '').toLowerCase();
+              if (pn) { conn.protocol_name = pn; conn.protocol_num = PROTO_NUM[pn]; }
+              var v6 = String(nv(ED.SourceIsIpv6) || '').toLowerCase() === 'true';
+              conn.protocol_ver_id = v6 ? 6 : 4; conn.protocol_ver = v6 ? 'Internet Protocol version 6 (IPv6)' : 'Internet Protocol version 4 (IPv4)';
+              var p = proc(ED.ProcessId, ED.Image, { uid: guid(ED.ProcessGuid), user: user(ED.User) });
+              actor(p ? p.user : null, p, null);
+              setAction(3, 17);
+            } else {
+              var WFP = { 5156: [1, 'Open', 1, 1], 5157: [5, 'Refuse', 2, 2], 5152: [5, 'Refuse', 2, 6],
+                          5154: [7, 'Listen', 1, 1], 5155: [7, 'Listen', 2, 2], 5158: [99, 'Bind', 1, 1], 5159: [99, 'Bind', 2, 2] };
+              var w = WFP[id];
+              setClass(4001, w[0], w[1]);
+              setAction(w[2], w[3]);
+              var dir = String(nv(ED.Direction) || '').toLowerCase();
+              var local = endpoint(ED.SourceAddress, ED.SourcePort, null);
+              var remote = endpoint(ED.DestAddress, ED.DestPort, null);
+              if (id === 5154 || id === 5155 || id === 5158 || id === 5159) {
+                // Listen / bind: only the local endpoint exists — it is the responder
+                local.hostname = S.computer;
+                o.dst_endpoint = local;
+              } else if (dir === 'inbound') {
+                // WFP always reports the local side as "Source". For inbound traffic the
+                // remote peer is the initiator, so swap to OCSF src (initiator) / dst (responder).
+                local.hostname = S.computer;
+                o.src_endpoint = remote; o.dst_endpoint = local;
+              } else {
+                local.hostname = S.computer;
+                o.src_endpoint = local; o.dst_endpoint = remote;
+              }
+              if (dir === 'inbound') { conn.direction_id = 1; conn.direction = 'Inbound'; }
+              else if (dir === 'outbound') { conn.direction_id = 2; conn.direction = 'Outbound'; }
+              else if (dir) { conn.direction_id = 99; conn.direction = nv(ED.Direction); }
+              else { conn.direction_id = 0; conn.direction = 'Unknown'; }
+              var pnum = num(ED.Protocol);
+              if (pnum != null) { conn.protocol_num = pnum; conn.protocol_name = IANA_PROTO[pnum]; }
+              var anyIp = (o.src_endpoint && o.src_endpoint.ip) || (o.dst_endpoint && o.dst_endpoint.ip);
+              if (anyIp) {
+                var v6w = anyIp.indexOf(':') >= 0;
+                conn.protocol_ver_id = v6w ? 6 : 4; conn.protocol_ver = v6w ? 'Internet Protocol version 6 (IPv6)' : 'Internet Protocol version 4 (IPv4)';
+              }
+              actor(null, proc(first(ED.ProcessID, ED.ProcessId), ED.Application), null);
+              if (nv(ED.FilterRTID) && nv(ED.FilterRTID) !== '0') o.firewall_rule = { uid: nv(ED.FilterRTID), name: nv(ED.FilterName) || null };
+              setStatus(auditOutcome() || 1);
+            }
+            var sip = o.src_endpoint && o.src_endpoint.ip, dip = o.dst_endpoint && o.dst_endpoint.ip;
+            if (sip && dip && isLoopback(sip) && isLoopback(dip)) { conn.boundary_id = 1; conn.boundary = 'Localhost'; }
+            if (conn.direction_id == null) { conn.direction_id = 0; conn.direction = 'Unknown'; }
+            o.connection_info = conn;
+          }
+
+          function mapDns() {
+            setClass(4003, 6, 'Traffic');
+            o.query = { hostname: nv(ED.QueryName) || 'unknown' };
+            o.query_time = msTime(ED.UtcTime);
+            // QueryResults: "type:  5 alias.example.com;::ffff:10.0.0.5;fe80::1;"
+            var DNS_TYPES = { 1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT', 28: 'AAAA', 33: 'SRV', 65: 'HTTPS' };
+            var qr = nv(ED.QueryResults);
+            if (qr) {
+              var ans = [];
+              var parts = qr.split(';');
+              for (var i = 0; i < parts.length; i++) {
+                var s = parts[i].trim();
+                if (!s) continue;
+                var m = /^type:\s*(\d+)\s+(.*)$/.exec(s);
+                if (m) ans.push({ type: DNS_TYPES[m[1]] || String(m[1]), rdata: m[2] });
+                else {
+                  var ip = cleanIp(s);
+                  if (ip) ans.push({ type: ip.indexOf(':') >= 0 ? 'AAAA' : 'A', rdata: ip });
+                  else ans.push({ rdata: s });
+                }
+              }
+              if (ans.length) o.answers = ans;
+            }
+            // QueryStatus is a Win32 error code; map the DNS_ERROR_RCODE_* range to OCSF rcode
+            var qs = num(ED.QueryStatus);
+            var RC = { 0: [0, 'NoError'], 9001: [1, 'FormError'], 9002: [2, 'ServError'], 9003: [3, 'NXDomain'], 9004: [4, 'NotImp'], 9005: [5, 'Refused'],
+                       9006: [6, 'YXDomain'], 9007: [7, 'YXRRSet'], 9008: [8, 'NXRRSet'], 9009: [9, 'NotAuth'], 9010: [10, 'NotZone'] };
+            if (qs != null) {
+              var rc = RC[qs] || [99, 'Other'];
+              o.rcode_id = rc[0]; o.rcode = rc[1];
+              if (qs === 0) setStatus(1, '0'); else setStatus(2, String(qs));
+            }
+            o.src_endpoint = endpoint(null, null, S.computer);
+            var p = proc(ED.ProcessId, ED.Image, { uid: guid(ED.ProcessGuid), user: user(ED.User) });
+            actor(p ? p.user : null, p, null);
+          }
+
+          // Security 4656/4663 AccessMask → File System activity (most significant right wins)
+          function fileActivityFromMask(mask) {
+            if (mask == null) return [99, 'Other'];
+            if (mask & 0x10000) return [4, 'Delete'];
+            if (mask & 0xC0000) return [7, 'Set Security'];
+            if (mask & 0x6) return [3, 'Update'];
+            if (mask & 0x110) return [6, 'Set Attributes'];
+            if (mask & 0x1) return [2, 'Read'];
+            if (mask & 0x88) return [8, 'Get Attributes'];
+            if (mask & 0x20000) return [9, 'Get Security'];
+            return [99, 'Other'];
+          }
+          function regActivityFromMask(mask) {
+            if (mask == null) return [99, 'Other'];
+            if (mask & 0x10000) return [4, 'Delete'];
+            if (mask & 0xC0000) return [6, 'Set Security'];
+            if (mask & 0x4) return [1, 'Create'];
+            if (mask & 0x2) return [3, 'Modify'];
+            if (mask & 0x19) return [2, 'Read'];
+            return [99, 'Other'];
+          }
+
+          function mapObjectAccess() {
+            // 4656 / 4663 / 4670 — File System or Registry Key depending on ObjectType
+            var objType = String(nv(ED.ObjectType) || '').toLowerCase();
+            var mask = num(ED.AccessMask);
+            var subj = subjectUser();
+            var p = proc(first(ED.ProcessId, ED.ProcessID), ED.ProcessName);
+            if (objType === 'key') {
+              var ra = id === 4670 ? [6, 'Set Security'] : regActivityFromMask(mask);
+              setClass(201001, ra[0], ra[1]);
+              o.reg_key = { path: nv(ED.ObjectName) || 'unknown', security_descriptor: id === 4670 ? nv(ED.NewSd) : null };
+              if (id === 4670 && nv(ED.OldSd)) o.prev_reg_key = { path: o.reg_key.path, security_descriptor: nv(ED.OldSd) };
+              if (mask != null) o.access_mask = mask;
+            } else {
+              var fa = id === 4670 ? [7, 'Set Security'] : id === 4656 ? [14, 'Open'] : fileActivityFromMask(mask);
+              setClass(1001, fa[0], fa[1]);
+              o.file = file(ED.ObjectName) || { name: 'unknown', type_id: 0, type: 'Unknown' };
+              if (id === 4670) {
+                o.file.security_descriptor = nv(ED.NewSd);
+              }
+              if (mask != null) o.access_mask = mask;
+            }
+            actor(subj, p, ED.SubjectLogonId);
+            setStatus(auditOutcome() || 1);
+          }
+
+          function mapRegistryValue4657() {
+            var op = String(nv(ED.OperationType) || '').toLowerCase();
+            var ra = op.indexOf('created') >= 0 || op === '%%1904' ? [2, 'Set']
+                   : op.indexOf('deleted') >= 0 || op === '%%1906' ? [4, 'Delete'] : [3, 'Modify'];
+            setClass(201002, ra[0], ra[1]);
+            var keyPath = nv(ED.ObjectName) || 'unknown';
+            var vname = nv(ED.ObjectValueName) || '(Default)';
+            o.reg_value = regValue(keyPath + '\\' + vname, vname, ED.NewValueType, ED.NewValue);
+            if (ra[0] !== 2 && (nv(ED.OldValue) != null || nv(ED.OldValueType) != null)) {
+              o.prev_reg_value = regValue(keyPath + '\\' + vname, vname, ED.OldValueType, ED.OldValue);
+            }
+            actor(subjectUser(), proc(first(ED.ProcessId, ED.ProcessID), ED.ProcessName), ED.SubjectLogonId);
+            setStatus(auditOutcome() || 1);
+          }
+
+          var REG_TYPES = { REG_BINARY: 1, REG_DWORD: 2, REG_DWORD_BIG_ENDIAN: 3, REG_EXPAND_SZ: 4, REG_LINK: 5, REG_MULTI_SZ: 6,
+                            REG_NONE: 7, REG_QWORD: 8, REG_QWORD_LITTLE_ENDIAN: 9, REG_SZ: 10 };
+          function regValue(path, name, type, data) {
+            var t = String(nv(type) || '').toUpperCase().replace(/\s.*$/, '');
+            if (t && !/^REG_/.test(t)) t = 'REG_' + t;
+            var v = { path: path, name: name, data: nv(data), is_default: name === '(Default)' };
+            if (REG_TYPES[t]) { v.type_id = REG_TYPES[t]; v.type = t; }
+            return v;
+          }
+
+          function mapSysmonFileOrRegistry() {
+            var p = proc(ED.ProcessId, ED.Image, { uid: guid(ED.ProcessGuid), user: user(ED.User) });
+            actor(p ? p.user : null, p, null);
+            if (id === 11 || id === 15) {
+              setClass(1001, 1, 'Create');
+              o.file = file(ED.TargetFilename, { created_time: msTime(ED.CreationUtcTime), hashes: hashes(ED.Hash || ED.Hashes) });
+            } else if (id === 23 || id === 26) {
+              setClass(1001, 4, 'Delete');
+              o.file = file(ED.TargetFilename, { hashes: hashes(ED.Hashes), is_deleted: true });
+            } else if (id === 2) {
+              // Timestomp: file = before, file_result = after
+              setClass(1001, 6, 'Set Attributes');
+              o.file = file(ED.TargetFilename, { created_time: msTime(ED.PreviousCreationUtcTime) });
+              o.file_result = file(ED.TargetFilename, { created_time: msTime(ED.CreationUtcTime) });
+            } else if (id === 12 || id === 13 || id === 14) {
+              var et = String(nv(ED.EventType) || '').toLowerCase();
+              var target = nv(ED.TargetObject) || 'unknown';
+              var leaf = target.split('\\').pop() || '(Default)';
+              if (id === 13 || et === 'setvalue') {
+                setClass(201002, 2, 'Set');
+                // Details: "DWORD (0x00000001)", "QWORD (0x...)", "Binary Data", or the string value
+                var det = nv(ED.Details);
+                var dm = det ? /^(DWORD|QWORD) \((0x[0-9a-f]+)(?:-(0x[0-9a-f]+))?\)$/i.exec(det) : null;
+                var rv = { path: target, name: leaf, is_default: leaf === '(Default)' };
+                if (dm) { rv.type = 'REG_' + dm[1].toUpperCase(); rv.type_id = REG_TYPES[rv.type]; rv.data = det; }
+                else if (det === 'Binary Data') { rv.type = 'REG_BINARY'; rv.type_id = 1; }
+                else if (det != null) rv.data = det;
+                o.reg_value = rv;
+              } else if (et === 'deletevalue') {
+                setClass(201002, 4, 'Delete');
+                o.reg_value = { path: target, name: leaf, is_default: leaf === '(Default)' };
+              } else if (id === 14 || et.indexOf('rename') === 0) {
+                setClass(201001, 5, 'Rename');
+                o.prev_reg_key = { path: target };
+                o.reg_key = { path: nv(ED.NewName) || target };
+              } else {
+                var ka = et === 'deletekey' ? [4, 'Delete'] : [1, 'Create'];
+                setClass(201001, ka[0], ka[1]);
+                o.reg_key = { path: target };
+              }
+            }
+          }
+
+          function mapModule() {
+            if (id === 6) {
+              setClass(1002, 1, 'Load');
+              o.driver = { file: peFile(ED.ImageLoaded) || { name: 'unknown', type_id: 0, type: 'Unknown' } };
+            } else {
+              setClass(1005, 1, 'Load');
+              o.module = { file: peFile(ED.ImageLoaded), load_type_id: 1, load_type: 'Standard' };
+              var p = proc(ED.ProcessId, ED.Image, { uid: guid(ED.ProcessGuid), user: user(ED.User) });
+              actor(p ? p.user : null, p, null);
+            }
+          }
+
+          function mapScheduledJob() {
+            var ACT = { 4698: [1, 'Create'], 4699: [3, 'Delete'], 4700: [4, 'Enable'], 4701: [5, 'Disable'], 4702: [2, 'Update'] };
+            setClass(1006, ACT[id][0], ACT[id][1]);
+            var taskName = nv(ED.TaskName) || '\\unknown';
+            var xml = String(first(ED.TaskContentNew, ED.TaskContent) || '')
+              .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+            function tag(t) { var m = new RegExp('<' + t + '>([\\s\\S]*?)</' + t + '>').exec(xml); return m ? m[1].trim() : null; }
+            var cmd = tag('Command'), args = tag('Arguments');
+            // The job's definition lives at %SystemRoot%\System32\Tasks\<TaskName>
+            o.job = {
+              name: taskName,
+              file: file('C:\\Windows\\System32\\Tasks' + (taskName.charAt(0) === '\\' ? '' : '\\') + taskName),
+              cmd_line: cmd ? (args ? cmd + ' ' + args : cmd) : null,
+              desc: tag('Description'),
+              user: user(tag('UserId'))
+            };
+            actor(subjectUser(), null, ED.SubjectLogonId);
+            setStatus(auditOutcome() || 1);
+          }
+
+          function mapService() {
+            var name, cmd, stype, start, acct;
+            if (id === 7040) {
+              setClass(201004, 2, 'Reconfigure');
+              name = first(ED.param4, ED.param1, ED.Data && ED.Data[0]);
+              start = first(ED.param3, ED.Data && ED.Data[2]);
+            } else {
+              setClass(201004, 1, 'Create');
+              name = nv(ED.ServiceName);
+              cmd = first(ED.ServiceFileName, ED.ImagePath);
+              stype = first(ED.ServiceType);
+              start = first(ED.ServiceStartType, ED.StartType);
+              acct = first(ED.ServiceAccount, ED.AccountName);
+            }
+            var svc = { name: name || 'unknown', cmd_line: cmd, service_start_name: acct };
+            // ServiceType: 4697 = hex bitmask, 7045 = text
+            var stn = num(stype), sts = String(stype || '').toLowerCase();
+            var ST = stn != null ? ((stn & 0x1) ? [1, 'Kernel Driver'] : (stn & 0x2) ? [2, 'File System Driver']
+                                 : (stn & 0x10) ? [3, 'Own Process'] : (stn & 0x20) ? [4, 'Share Process'] : [99, String(stype)])
+                   : sts.indexOf('kernel') >= 0 ? [1, 'Kernel Driver'] : sts.indexOf('file system') >= 0 ? [2, 'File System Driver']
+                   : sts.indexOf('own process') >= 0 ? [3, 'Own Process'] : sts.indexOf('share') >= 0 ? [4, 'Share Process']
+                   : sts ? [99, nv(stype)] : null;
+            if (ST) {
+              svc.service_type_id = ST[0]; svc.service_type = ST[1];
+              svc.service_category_id = ST[0] === 1 || ST[0] === 2 ? 1 : ST[0] === 3 || ST[0] === 4 ? 2 : 0;
+              svc.service_category = { 0: 'Unknown', 1: 'Kernel Mode', 2: 'User Mode' }[svc.service_category_id];
+              if (ST[0] === 99 && /user mode/i.test(sts)) { svc.service_category_id = 2; svc.service_category = 'User Mode'; }
+            }
+            // StartType: 4697 = 0..4, 7045/7040 = text
+            var sn = num(start), ss = String(start || '').toLowerCase();
+            var SS = sn != null ? ({ 0: [1, 'Boot'], 1: [2, 'System'], 2: [3, 'Auto'], 3: [4, 'Demand'], 4: [5, 'Disabled'] }[sn] || [99, String(start)])
+                   : ss.indexOf('boot') >= 0 ? [1, 'Boot'] : ss.indexOf('system') >= 0 ? [2, 'System'] : ss.indexOf('auto') >= 0 ? [3, 'Auto']
+                   : ss.indexOf('demand') >= 0 || ss.indexOf('manual') >= 0 ? [4, 'Demand'] : ss.indexOf('disabled') >= 0 ? [5, 'Disabled']
+                   : ss ? [99, nv(start)] : null;
+            if (SS) { svc.service_start_type_id = SS[0]; svc.service_start_type = SS[1]; }
+            if (svc.cmd_line == null && svc.service_start_type_id == null && svc.service_type_id == null && svc.service_start_name == null) {
+              svc.service_category_id = 0; svc.service_category = 'Unknown';
+            }
+            o.win_service = svc;
+            var su = subjectUser() || user(null, null, S.userSid);
+            actor(su, null, ED.SubjectLogonId);
+            if (isSecurity) setStatus(auditOutcome() || 1);
+          }
+
+          function mapEventLog() {
+            var ACT = { 1102: [1, 'Clear'], 104: [1, 'Clear'], 1100: [7, 'Stop'] };
+            setClass(1008, ACT[id][0], ACT[id][1]);
+            o.log_name = id === 104 ? (nv(ED.Channel) || S.channel) : 'Security';
+            o.log_provider = S.provider || 'Microsoft-Windows-Eventlog';
+            o.log_type_id = 1; o.log_type = 'OS';
+            if (id === 104 && nv(ED.BackupPath)) o.file = file(ED.BackupPath);
+            o.dst_endpoint = endpoint(null, null, S.computer);
+            actor(subjectUser(), null, ED.SubjectLogonId);
+            setStatus(1);
+          }
+
+          function mapScript() {
+            setClass(1009, 1, 'Execute');
+            var path = nv(ED.Path);
+            o.script = {
+              script_content: { value: String(ED.ScriptBlockText == null ? '' : ED.ScriptBlockText) },
+              type_id: 2, type: 'PowerShell',
+              uid: guid(ED.ScriptBlockId),
+              name: path ? basename(path) : null,
+              file: path ? file(path) : null
+            };
+            actor(user(null, null, S.userSid), S.pid != null ? { pid: S.pid } : null, null);
+          }
+
+          // ---------- dispatch ----------
+          var AUTH = [4624, 4625, 4634, 4647, 4648, 4768, 4769, 4770, 4771, 4772, 4773, 4776, 4778, 4779];
+          var ACCT = [4720, 4722, 4723, 4724, 4725, 4726, 4738, 4740, 4741, 4742, 4743, 4767, 4781];
+          var GROUP_IDS = [4727, 4728, 4729, 4730, 4731, 4732, 4733, 4734, 4735, 4737,
+                           4744, 4745, 4746, 4747, 4748, 4749, 4750, 4751, 4752, 4753, 4754, 4755, 4756, 4757, 4758,
+                           4759, 4760, 4761, 4762, 4763];
+          var mapped = true;
+          var objTypeLc = String(nv(ED.ObjectType) || '').toLowerCase();
+          if (isSysmon) {
+            if ([1, 5, 8, 10, 25].indexOf(id) >= 0) mapProcess();
+            else if (id === 3) mapNetwork();
+            else if (id === 22) mapDns();
+            else if ([2, 11, 12, 13, 14, 15, 23, 26].indexOf(id) >= 0) mapSysmonFileOrRegistry();
+            else if (id === 6 || id === 7) mapModule();
+            else mapped = false;
+          } else if (isSecurity) {
+            if (AUTH.indexOf(id) >= 0) mapAuthentication();
+            else if (ACCT.indexOf(id) >= 0) mapAccountChange();
+            else if (GROUP_IDS.indexOf(id) >= 0) mapGroupManagement();
+            else if (id === 4704 || id === 4705) mapUserAccess();
+            else if (id === 4672) mapAuthorizeSession();
+            else if (id === 4688 || id === 4689) mapProcess();
+            else if ([5152, 5154, 5155, 5156, 5157, 5158, 5159].indexOf(id) >= 0) mapNetwork();
+            else if ((id === 4656 || id === 4663 || id === 4670) && (objTypeLc === 'file' || objTypeLc === 'key')) mapObjectAccess();
+            else if (id === 4657) mapRegistryValue4657();
+            else if (id >= 4698 && id <= 4702) mapScheduledJob();
+            else if (id === 4697) mapService();
+            else if (id === 1102 || id === 1100) mapEventLog();
+            else mapped = false;
+          } else if (chan === 'system' && (id === 7045 || id === 7040) && /service control manager/.test(provLc)) {
+            mapService();
+          } else if (chan === 'system' && id === 104 && /eventlog/.test(provLc)) {
+            mapEventLog();
+          } else if (id === 4104 && /powershell/.test(chan + ' ' + provLc)) {
+            mapScript();
+          } else {
+            mapped = false;
+          }
+          if (!mapped) {
+            // activity_name carries the source value (task category, else the event id)
+            var taskName = nv(SYS_REST.Task);
+            setClass(0, 99, taskName && !/^\d+$/.test(taskName) ? taskName : 'Windows Event ' + (id != null ? id : 'Unknown'));
+            var su0 = subjectUser() || user(null, null, S.userSid);
+            if (su0) actor(su0, null, ED.SubjectLogonId);
+            var ao0 = auditOutcome();
+            if (ao0) setStatus(ao0);
+          }
+
+          // ---------- common attributes ----------
+          // Severity from Windows Level: 1 Critical→5, 2 Error→4, 3 Warning→3, 0/4/5 → Informational
+          var SEV = { 0: 1, 1: 5, 2: 4, 3: 3, 4: 1, 5: 1 };
+          o.severity_id = S.level != null && SEV[S.level] != null ? SEV[S.level] : (S.level == null ? 1 : 99);
+          o.severity = SEVERITY_NAMES[o.severity_id];
+          o.message = S.message || (isSysmon ? SYSMON_MSG[id] : MSG[id]) || null;
+          o.time = __e._time != null ? Math.round(Number(__e._time) * 1000) : Date.now();  // re-stamped after Auto Timestamp
+
+          var fqdn = S.computer;
+          o.device = {
+            hostname: fqdn,
+            name: fqdn ? fqdn.split('.')[0] : null,
+            domain: fqdn && fqdn.indexOf('.') > 0 ? fqdn.substring(fqdn.indexOf('.') + 1) : null,
+            type_id: 0, type: 'Unknown',
+            os: { name: 'Windows', type_id: 100, type: 'Windows' }
+          };
+          if (!o.device.hostname) o.device.name = nv(__e.host) || 'unknown';
+
+          var md = {
+            version: OCSF_VERSION,
+            product: {
+              name: isSysmon ? 'Sysmon' : 'Windows',
+              vendor_name: 'Microsoft',
+              feature: S.provider ? { name: S.provider } : null
+            },
+            log_name: S.channel,
+            log_provider: S.provider,
+            log_level: S.levelName || (S.level != null ? WIN_LEVEL_NAMES[S.level] : null),
+            event_code: id != null ? String(id) : null,
+            uid: S.recordId,
+            correlation_uid: guid(S.correlation),
+            original_time: S.timeCreated,
+            processed_time: Date.now(),
+            profiles: profiles
+          };
+          if (extension) md.extensions = [extension];
+          o.metadata = md;
+
+          if (CFG.includeUnmapped) {
+            o.unmapped = { EventData: ED, System: SYS_REST };
+          }
+          if (CFG.includeRawData) o.raw_data = raw;
+
+          // ---------- observables (OCSF observable type_id) ----------
+          var obs = [], seen = {};
+          function addObs(name, typeId, typeName, value) {
+            if (value == null || value === '') return;
+            var k = name + '|' + value;
+            if (seen[k]) return;
+            seen[k] = 1;
+            obs.push({ name: name, type_id: typeId, type: typeName, value: String(value) });
+          }
+          function get(path) {
+            var cur = o, ps = path.split('.');
+            for (var i = 0; i < ps.length; i++) { if (cur == null || typeof cur !== 'object') return null; cur = cur[ps[i]]; }
+            return cur;
+          }
+          var OBS_PATHS = [
+            ['device.hostname', 1, 'Hostname'], ['src_endpoint.hostname', 1, 'Hostname'], ['dst_endpoint.hostname', 1, 'Hostname'],
+            ['query.hostname', 1, 'Hostname'],
+            ['src_endpoint.ip', 2, 'IP Address'], ['dst_endpoint.ip', 2, 'IP Address'],
+            ['user.name', 4, 'User Name'], ['actor.user.name', 4, 'User Name'], ['process.user.name', 4, 'User Name'],
+            ['file.name', 7, 'File Name'], ['process.file.name', 7, 'File Name'], ['module.file.name', 7, 'File Name'],
+            ['process.name', 9, 'Process Name'], ['actor.process.name', 9, 'Process Name'], ['process.parent_process.name', 9, 'Process Name'],
+            ['process.cmd_line', 13, 'Command Line'], ['job.cmd_line', 13, 'Command Line'], ['win_service.cmd_line', 13, 'Command Line'],
+            ['user.uid', 31, 'User Object: uid'], ['actor.user.uid', 31, 'User Object: uid'],
+            ['group.name', 32, 'Group Object: name'], ['group.uid', 33, 'Group Object: uid']
+          ];
+          for (var oi = 0; oi < OBS_PATHS.length; oi++) addObs(OBS_PATHS[oi][0], OBS_PATHS[oi][1], OBS_PATHS[oi][2], get(OBS_PATHS[oi][0]));
+          var HASH_PATHS = ['process.file', 'file', 'module.file', 'driver.file'];
+          for (var hi = 0; hi < HASH_PATHS.length; hi++) {
+            var hs = get(HASH_PATHS[hi] + '.hashes');
+            if (Array.isArray(hs)) for (var hj = 0; hj < hs.length; hj++) addObs(HASH_PATHS[hi] + '.hashes.value', 8, 'Hash', hs[hj].value);
+          }
+          if (obs.length) o.observables = obs;
+
+          // ---------- prune null / empty (OCSF: omit attributes with no value) ----------
+          function prune(x, depth) {
+            if (x == null || depth > 12) return x == null ? undefined : x;
+            if (Array.isArray(x)) {
+              var a = [];
+              for (var i = 0; i < x.length; i++) { var v = prune(x[i], depth + 1); if (v !== undefined) a.push(v); }
+              return a.length ? a : undefined;
+            }
+            if (typeof x === 'object') {
+              var r = {}, n = 0, ks = Object.keys(x);
+              for (var j = 0; j < ks.length; j++) {
+                var pv = prune(x[ks[j]], depth + 1);
+                if (pv !== undefined && pv !== '') { r[ks[j]] = pv; n++; }
+              }
+              return n ? r : undefined;
+            }
+            if (typeof x === 'number' && isNaN(x)) return undefined;
+            return x;
+          }
+          // unmapped is kept verbatim (it is the lossless copy); everything else is pruned
+          var keepUnmapped = o.unmapped;
+          delete o.unmapped;
+          o = prune(o, 0) || {};
+          if (keepUnmapped) o.unmapped = keepUnmapped;
+
+          __e.__ocsf = o;
+          __e.__ocsf_class_uid = o.class_uid;
+          __e.__ocsf_class_name = o.class_name;
+          __e.__ocsf_channel = String(S.channel || 'Unknown').trim().replace(/\s+/g, '_');
+
+        } catch (err) {
+          // Unparseable / unmappable: keep _raw untouched and tag it so it is easy to find
+          __e.cribl_code_error = String(err);
+          __e.sourcetype = 'ocsf:parse_error';
+          __e.__time_utc = false;
+          __e.__ocsf = undefined;
+        }
+    description: Parse Windows Event (XML or Classic text) and map it to an OCSF 1.4.0 class in __ocsf
+  - id: lookup
+    filter: "true"
+    disabled: false
+    conf:
+      dbLookup: false
+      matchMode: regex
+      matchType: specific
+      reloadPeriodSec: -1
+      inFields:
+        - eventField: host
+          lookupField: host
+      addToEvent: false
+      ignoreCase: false
+      file: host_timezone.csv
+      outFields:
+        - eventField: __tz
+          lookupField: tz
+    description: Per-host timezone for Classic timestamps that carry no offset
+  - id: auto_timestamp
+    filter: "true"
+    disabled: false
+    conf:
+      srcField: _time
+      dstField: _time
+      defaultTimezone: utc
+      # Shift by the host_timezone offset only when the Code step did not mark
+      # _time as authoritative UTC (XML SystemTime, Classic strings with an offset).
+      timeExpression: "(__tz && !__time_utc) ? C.Time.adjustTZ(time.getTime(),
+        'UTC', __tz) / 1000 : time.getTime() / 1000"
+      offset: 0
+      maxLen: 150
+      defaultTime: now
+      latestDateAllowed: +1week
+      earliestDateAllowed: -420weeks
+      timestamps:
+        - regex: /(.*)/
+          strptime: "%s"
+    description: Use the correct "generated time" as the timestamp for the event.
+  - id: code
+    filter: "__ocsf != null"
+    disabled: false
+    conf:
+      maxNumOfIterations: 5000
+      activeLogSampleRate: 1
+      useUniqueLogChannel: false
+      code: |-
+        // Emit OCSF — runs after Auto Timestamp so OCSF time uses the final _time.
+        //   ocsfOutputMode 'raw'    (default) _raw = OCSF JSON; only _raw/_time/host/source/sourcetype/index kept
+        //   ocsfOutputMode 'fields' OCSF attributes become top-level event fields and _raw is removed
+        //                           (use for Parquet / Amazon Security Lake / Cribl Lake destinations)
+        var o = __e.__ocsf;
+        if (o && typeof o === 'object') {
+          var mode = 'raw';
+          try { if (C.vars && C.vars.ocsfOutputMode) mode = String(C.vars.ocsfOutputMode).toLowerCase(); } catch (e) { /* default */ }
+
+          if (__e._time != null && !isNaN(Number(__e._time))) o.time = Math.round(Number(__e._time) * 1000);
+
+          var KEEP = mode === 'fields' ? { _time: 1 } : { _raw: 1, _time: 1, host: 1, source: 1, sourcetype: 1, index: 1 };
+          var ks = Object.keys(__e);
+          for (var i = 0; i < ks.length; i++) {
+            var k = ks[i];
+            if (KEEP[k] || k.indexOf('__') === 0 || k.indexOf('cribl_') === 0) continue;
+            delete __e[k];
+          }
+          if (mode === 'fields') {
+            var ok = Object.keys(o);
+            for (var j = 0; j < ok.length; j++) __e[ok[j]] = o[ok[j]];
+          } else {
+            __e._raw = JSON.stringify(o);
+            __e.sourcetype = 'ocsf';
+            __e.source = 'windows:ocsf:' + (__e.__ocsf_channel || 'Unknown');
+          }
+          __e.__ocsf = undefined;
+        }
+    description: Emit OCSF - set time from final _time and write _raw (raw mode) or top-level fields (fields mode)
+description: Windows Event Log (XML and Classic) to OCSF 1.4.0

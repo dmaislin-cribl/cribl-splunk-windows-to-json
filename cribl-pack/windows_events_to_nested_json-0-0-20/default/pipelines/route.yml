@@ -1,0 +1,32 @@
+id: default
+groups: {}
+comments:
+  - id: ocsf_note
+    index: 0
+    comment: |
+      windows_ocsf ships disabled. Enable it to send Windows events through
+      Windows_Events_to_OCSF (OCSF 1.4.0) instead of the nested-JSON pipeline.
+      Narrow its filter to split traffic between the two outputs.
+routes:
+  - id: windows_ocsf
+    name: windows_ocsf
+    final: true
+    disabled: true
+    pipeline: Windows_Events_to_OCSF
+    description: Windows Event Log (XML + Classic) to OCSF 1.4.0 — enable to use
+    enableOutputExpression: false
+    outputExpression: null
+    filter: "true"
+    clones: []
+    targetContext: group
+    output: __group
+  - id: default
+    name: default
+    final: true
+    disabled: false
+    pipeline: Windows_Events_to_Nested_JSON
+    description: ""
+    enableOutputExpression: false
+    filter: "true"
+    clones: []
+    output: default

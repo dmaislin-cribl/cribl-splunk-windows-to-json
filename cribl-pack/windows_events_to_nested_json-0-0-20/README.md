@@ -158,6 +158,108 @@ filter: '/^(?:Xml)?WinEventLog:/.test(source) || (sourcetype && sourcetype.start
 
 For Edge-only Windows XML pipelines, tighten the filter to whatever **source** / **sourcetype** Edge assigns.
 
+## OCSF pipeline (`Windows_Events_to_OCSF`)
+
+A second pipeline maps the same Windows events to **[OCSF 1.4.0](https://schema.ocsf.io/1.4.0/)**. It uses the same parser as `Windows_Events_to_Nested_JSON`: XML detection, `clean()`, the Classic `Message` tokenizer, and `%%NNNN` resolution. On top of that it adds a mapping layer, so both formats produce the same OCSF event.
+
+**Turning it on:** the `windows_ocsf` route in `default/pipelines/route.yml` ships **disabled**, above the default route. Enable it to send Windows events to OCSF instead of nested JSON, or narrow its filter to split traffic between the two outputs. It returns events to the Worker Group (`output: __group`), so the group's own routes pick the destination.
+
+### Functions
+
+1. **Code — parse + map.**
+   - Parses XML or Classic text.
+   - Normalizes Classic sections to the XML `EventData` names. For example, `Subject.Account_Name` becomes `SubjectUserName`, and `New_Logon.Security_ID` becomes `TargetUserSid`. One mapping table then serves both formats.
+   - Picks the OCSF class and activity from the channel/provider and event ID.
+   - Builds the OCSF object in `__ocsf`.
+2. **Lookup `host_timezone.csv`** and **Auto Timestamp**. These are identical to the nested-JSON pipeline.
+3. **Code — emit.**
+   - Sets OCSF `time` (epoch ms) from the final `_time`, then writes the output.
+   - `raw` mode (default) keeps only `_raw`, `_time`, `host`, `source`, `sourcetype` and `index`.
+   - `fields` mode drops every other non-internal field before writing the OCSF attributes.
+
+### Output
+
+| `ocsfOutputMode` | Result | Use with |
+|---|---|---|
+| `'raw'` (default) | `_raw` = OCSF JSON, `sourcetype=ocsf`, `source=windows:ocsf:<Channel>` | Splunk HEC, S3/Blob JSON, HTTP, Kafka |
+| `'fields'` | OCSF attributes as top-level event fields; `_raw` removed | Parquet, Amazon Security Lake, Cribl Lake |
+
+Parse failures keep the original `_raw`, get `sourcetype=ocsf:parse_error` and carry the error in `cribl_code_error`. Input with no EventID/EventCode (not a Windows event) is treated as a parse failure.
+
+### Pack variables (`default/vars.yml`)
+
+| Variable | Default | Effect |
+|---|---|---|
+| `ocsfOutputMode` | `'raw'` | Output shape (table above) |
+| `ocsfIncludeUnmapped` | `true` | Put the full `EventData` and leftover `System` fields in `unmapped`, so nothing from the source is lost |
+| `ocsfIncludeRawData` | `false` | Copy the original event text into `raw_data` (roughly doubles event size) |
+
+### Event ID → OCSF class
+
+| OCSF class (uid) | Windows events → activity |
+|---|---|
+| Authentication (3002) | 4624/4625/4648/4778 Logon · 4634/4647/4779 Logoff · 4768/4772 Authentication Ticket · 4769/4773 Service Ticket Request · 4770 Service Ticket Renew · 4771 Preauth · 4776 Other (Credential Validation) |
+| Account Change (3001) | 4720/4741 Create · 4722 Enable · 4723 Password Change · 4724 Password Reset · 4725 Disable · 4726/4743 Delete · 4740 Lock · 4767 Unlock · 4738/4742/4781 Other |
+| Group Management (3006) | 4727/4731/4744/4749/4754/4759 Create · 4728/4732/4746/4751/4756/4761 Add User · 4729/4733/4747/4752/4757/4762 Remove User · 4730/4734/4748/4753/4758/4763 Delete · 4735/4737/4745/4750/4755/4760 Other |
+| User Access Management (3005) | 4704 Assign Privileges · 4705 Revoke Privileges |
+| Authorize Session (3003) | 4672 Assign Privileges |
+| Process Activity (1007) | 4688, Sysmon 1 Launch · 4689, Sysmon 5 Terminate · Sysmon 10 Open · Sysmon 8 Inject · Sysmon 25 Other |
+| Network Activity (4001) | Sysmon 3, 5156 Open · 5152/5157 Refuse · 5154/5155 Listen · 5158/5159 Other (Bind) |
+| DNS Activity (4003) | Sysmon 22 Traffic (query + parsed answers + rcode) |
+| File System Activity (1001) | Sysmon 11/15 Create · Sysmon 23/26 Delete · Sysmon 2 Set Attributes · 4663 (`ObjectType=File`, activity from `AccessMask`) · 4656 Open · 4670 Set Security |
+| Registry Key Activity (201001, `win`) | 4656/4663/4670 with `ObjectType=Key` · Sysmon 12 CreateKey/DeleteKey · Sysmon 14 Rename |
+| Registry Value Activity (201002, `win`) | 4657 Set/Modify/Delete · Sysmon 13 Set · Sysmon 12 DeleteValue |
+| Module Activity (1005) | Sysmon 7 Load (with Authenticode signature state) |
+| Kernel Extension Activity (1002) | Sysmon 6 Load |
+| Scheduled Job Activity (1006) | 4698 Create · 4702 Update · 4699 Delete · 4700 Enable · 4701 Disable (command line parsed from the task XML) |
+| Windows Service Activity (201004, `win`) | 4697, System 7045 Create · System 7040 Reconfigure |
+| Event Log Activity (1008) | 1102, System 104 Clear · 1100 Stop |
+| Script Activity (1009) | PowerShell 4104 Execute (script block text, id, path) |
+| Base Event (0) | Any other event ID. `activity_name` holds the task category; all data is in `unmapped` |
+
+### Mapping notes
+
+- **Principals.**
+  - `user` is the account the event is about: the target of a logon, account change or group membership.
+  - `actor.user` / `actor.process` is who or what did it (Subject + calling process).
+  - `user.type_id` comes from well-known SIDs: `S-1-5-18/19/20` → System, RID 500 → Admin, `S-1-5-21-*` → User. Names ending in `$` → Other ("Computer").
+  - `DOMAIN\user` and Kerberos `user@REALM` are split into `name` + `domain`. A NULL SID and `-` are omitted.
+- **Logon.**
+  - Windows `LogonType` maps to `logon_type_id`; Windows type 0 is OCSF 1 (System).
+  - `is_remote` is set for types 3, 8, 10 and 12; `is_cleartext` for type 8.
+  - `auth_protocol_id` is Kerberos (2) or NTLM (1, including MSV1_0 and 4776); anything else is Other with the package name.
+  - Logon IDs are lowercased so XML and Classic correlate, and `0x0` is dropped.
+- **Status.**
+  - 4625/4776 use the NTSTATUS code in `status_code` and its meaning in `status_detail`. For 4625 the code is `SubStatus` unless that is `0x0`.
+  - Kerberos events use the Kerberos result code.
+  - Everything else takes success or failure from the audit `Keywords`.
+- **Network (WFP 515x).**
+  - Windows always reports the local side as "Source". For inbound connections the pipeline swaps the endpoints, so OCSF `src_endpoint` is always the initiator.
+  - Also set: `action_id` / `disposition_id` (`security_control` profile), `firewall_rule.uid` = FilterRTID, IANA protocol names, and `boundary_id` Localhost.
+- **Severity.** Windows `Level` 1 → Critical, 2 → High, 3 → Medium, 0/4/5 → Informational.
+- **Metadata.**
+  - `metadata.product` is Microsoft Windows or Microsoft Sysmon, with `feature.name` = provider.
+  - Also set: `log_name` (channel), `event_code`, `uid` (record ID), `original_time`, `correlation_uid` (ActivityID).
+  - Extension classes carry `metadata.extensions: [{name: win, uid: 2}]`.
+- **Observables.** Hostnames, IPs, user names and SIDs, process/file names, command lines, hashes and groups are indexed in `observables`.
+- **Multi-line classic fields (`Privileges:`, `Accesses:`).** The Classic parser promotes a multi-line field (e.g. 4672's `Privileges:` list) to a JSON array; `classicToEventData()` and the `privilegeList()` helper both check `Array.isArray()` before falling back to whitespace-splitting a string, so a Classic 4672 and an XML 4672 (whose `PrivilegeList` is one whitespace-joined string) produce the same `privileges` array.
+
+### Validation
+
+`data/samples/windows_ocsf_xml.json` (22 events) and `windows_ocsf_classic.json` (4 events) are anonymized samples covering the classes above. All 26 outputs pass the OCSF schema server validator (`POST https://schema.ocsf.io/1.4.0/api/v2/validate`) with no errors. One advisory warning remains, on the Base Event fallback's generic `type_name`.
+
+Example (Classic 4625 → Authentication, abbreviated):
+
+```json
+{"class_uid":3002,"activity_id":1,"type_uid":300201,"type_name":"Authentication: Logon",
+ "user":{"name":"administrator","domain":"CORP"},
+ "logon_type_id":3,"logon_type":"Network","is_remote":true,"auth_protocol_id":1,"auth_protocol":"NTLM",
+ "src_endpoint":{"ip":"198.51.100.23","port":51432,"hostname":"KALI"},
+ "dst_endpoint":{"hostname":"DC01.corp.example.com"},
+ "status_id":2,"status":"Failure","status_code":"0xc000006a","status_detail":"Unknown user name or bad password.",
+ "metadata":{"version":"1.4.0","product":{"name":"Windows","vendor_name":"Microsoft"},"log_name":"Security","event_code":"4625"}}
+```
+
 ## CIM / field aliasing (Splunk TA)
 
 Cribl_TA_windows maps nested JSON (including **`Message.*`**) to searchable and CIM-friendly fields via **`default/props.conf`** and **`default/transforms.conf`** (not a separate `props_windows_event_common.conf` in this app). Examples the TA understands alongside **`EventData.*` / `System.*`**:
@@ -184,6 +286,13 @@ default/
     route.yml
     Windows_Events_to_Nested_JSON/
       conf.yml
+    Windows_Events_to_OCSF/
+      conf.yml
+  samples.yml
+  vars.yml
+data/
+  lookups/
+  samples/
 ```
 
 ## Supported channels / event types
@@ -232,6 +341,12 @@ The script probes `%%1`..`%%30000` across five source DLLs by default (`adtschem
 ## Version
 
 Pack version is tracked in `package.json` and aligned with the paired **Cribl_TA_windows** Splunk app. From 0.0.5 onward, both artifacts share the same version number to keep support conversations simple.
+
+**0.0.20** — **New `Windows_Events_to_OCSF` pipeline** (contributed by [simondev65](https://github.com/simondev65/cribl-splunk-windows-to-json/tree/feature/ocsf-pipeline)), merged on top of the 0.0.19 fixes. Maps Windows XML and Classic events to OCSF 1.4.0 across 17 classes — authentication, account and group changes, process, network, DNS, file, registry, module, driver, scheduled task, service, log clear and PowerShell script events, with Base Event for everything else. It reuses the nested-JSON parser logic (its own copy, not a shared import — Cribl pipelines can't reference another pipeline's Code function), so both formats map identically. The new route `windows_ocsf` ships disabled. New pack variables are `ocsfOutputMode`, `ocsfIncludeUnmapped` and `ocsfIncludeRawData`, and there are anonymized sample files for both formats. See [OCSF pipeline](#ocsf-pipeline-windows_events_to_ocsf).
+
+Two fixes applied while merging, since the OCSF branch forked before the 0.0.19 fixes existed:
+- Ported the 0.0.19 multi-line `Message` fix (below) into the OCSF pipeline's own parser copy, so a Classic 4672 gets the same complete `Privileges` list as its XML equivalent.
+- That fix alone wasn't enough: `classicToEventData()`'s section-detection check (`typeof v === 'object'`) also matches arrays (arrays are `typeof 'object'` in JS), so a multi-line field was being misread as a nested section and its values scattered into numeric keys instead of landing on `PrivilegeList`. Added an explicit `!Array.isArray(v)` guard, and a `privilegeList()` helper that accepts either an array (Classic, multi-line) or a whitespace-joined string (XML, UF-rendered) so both shapes produce the same `privileges` output. Verified against all 26 shipped OCSF samples (zero change) plus a 12-privilege Classic 4672 built from the real event that originally surfaced the 0.0.19 bug (`privileges` now has all 12, including `SeDebugPrivilege` and `SeImpersonatePrivilege`, instead of 0).
 
 **0.0.19** — **Multi-line classic `Message` values no longer silently dropped.** `parseClassic()`'s continuation-line handling only promoted a bare (no-colon) follow-on line into the output when it followed a *section* header (e.g. 4627's `Group Membership:`). Windows also renders some flat, non-sectioned keys with only the first value on the `Key:` line and every other value as its own bare continuation line — Security event 4672 ("Special privileges assigned to new logon") lists up to a dozen `Privileges:` entries this way, and 4663 ("An attempt was made to access an object") lists `Accesses:` identically. Those continuation lines had nowhere to go and were dropped: a real 4672 sample event was landing with `Message.Privileges` containing only the first of twelve assigned privileges — losing `SeDebugPrivilege` and `SeImpersonatePrivilege`, both common privilege-escalation/lateral-movement hunting signals. Fixed by tracking the most recently set key (section-scoped or flat) and promoting it to a JSON array as continuation lines arrive. `Message.Privileges` (and `Message.<Section>.Accesses`, etc.) now comes through as a proper multivalue field instead of a truncated string. Verified against a 9-event-type classic sample (4688, 4776, 4793, 4670, 4673, 4672, 4627, 4624, 4798): only 4672's `Privileges` shape changed; the other 8 event types parsed byte-identical to 0.0.18.
 
