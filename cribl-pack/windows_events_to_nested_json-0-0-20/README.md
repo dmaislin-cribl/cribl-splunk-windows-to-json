@@ -1,5 +1,7 @@
 # Windows Events to Nested JSON
 
+**Paired Splunk add-on:** this pack's `windows:json` output is meant to be read by **Cribl_TA_windows** — [⬇ download `Cribl_TA_windows.tgz`](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/raw/main/splunk-ta/Cribl_TA_windows.tgz) · [TA README](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/blob/main/splunk-ta/Cribl_TA_windows/README.md). Install the TA on your Splunk indexer/search tier before deploying this pack.
+
 ---
 
 ## Scope and limits
