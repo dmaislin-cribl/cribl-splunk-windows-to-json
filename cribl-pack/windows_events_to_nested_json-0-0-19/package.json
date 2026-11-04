@@ -1,0 +1,1 @@
+{"name":"windows_events_to_nested_json","version":"0.0.19","displayName":"Windows Events to Nested JSON","description":"Converts Windows Event Log XML and Classic rendered text to nested JSON in _raw; sets sourcetype=windows:json and source=windows:json:<Channel> for Cribl_TA_windows on Splunk.","tags":{"streamtags":["windows","events","xml","json","splunk-ta"]},"exports":[]}

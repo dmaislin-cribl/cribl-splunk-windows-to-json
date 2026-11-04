@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "2.0.0",
+  "info": {
+    "title": "Cribl Windows TA for Splunk",
+    "id": {
+      "group": null,
+      "name": "Cribl_TA_windows",
+      "version": "0.0.19"
+    },
+    "author": [
+      {
+        "name": "Cribl",
+        "email": null,
+        "company": "Cribl"
+      }
+    ],
+    "releaseDate": null,
+    "description": "Universal Windows TA: WinEventLog, XmlWinEventLog, JSON. Original source/sourcetype preserved. KV_MODE=json for Cribl. Standalone. CIM compliant.",
+    "classification": {
+      "intendedAudience": null,
+      "categories": ["Windows", "IT Operations"],
+      "developmentStatus": "Stable"
+    },
+    "commonInformationModels": null,
+    "license": {
+      "name": null,
+      "text": null,
+      "uri": null
+    },
+    "privacyPolicy": {
+      "name": null,
+      "text": null,
+      "uri": null
+    },
+    "releaseNotes": {
+      "name": null,
+      "text": "./README.md",
+      "uri": null
+    }
+  },
+  "dependencies": null,
+  "tasks": null,
+  "inputGroups": null,
+  "incompatibleApps": null,
+  "platformRequirements": {
+    "splunk": {
+      "Enterprise": "8.0"
+    }
+  },
+  "supportedDeployments": [
+    "_standalone",
+    "_distributed",
+    "_search_head_clustering"
+  ],
+  "targetWorkloads": ["_search_heads"]
+}

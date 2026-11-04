@@ -1,0 +1,6 @@
+host,tz
+# One row per host regex → IANA timezone. Applies only to Classic-format events
+# whose source timestamp has no explicit timezone info. XML events with
+# UTC-anchored SystemTime are ignored by the pipeline's timezone step.
+# Delete or replace the placeholder row below with real host regex→tz mappings.
+__DELETE_THIS_PLACEHOLDER_ROW__,UTC

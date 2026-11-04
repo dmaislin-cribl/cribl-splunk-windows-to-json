@@ -1,0 +1,980 @@
+code,value,category,microsoft_source_event
+%%279,Undefined Access (no effect) Bit 7,Standard Access Rights,4656
+%%1536,Unused message ID,Reserved / Unused,
+%%1537,DELETE,Standard Access Rights,4656
+%%1538,READ_CONTROL,Standard Access Rights,4656
+%%1539,WRITE_DAC,Standard Access Rights,4656
+%%1540,WRITE_OWNER,Standard Access Rights,4656
+%%1541,SYNCHRONIZE,Standard Access Rights,4656
+%%1542,ACCESS_SYS_SEC,Standard Access Rights,4656
+%%1543,MAX_ALLOWED,Standard Access Rights,4656
+%%1552,Unknown specific access (bit 0),Standard Access Rights,4656
+%%1553,Unknown specific access (bit 1),Standard Access Rights,4656
+%%1554,Unknown specific access (bit 2),Standard Access Rights,4656
+%%1555,Unknown specific access (bit 3),Standard Access Rights,4656
+%%1556,Unknown specific access (bit 4),Standard Access Rights,4656
+%%1557,Unknown specific access (bit 5),Standard Access Rights,4656
+%%1558,Unknown specific access (bit 6),Standard Access Rights,4656
+%%1559,Unknown specific access (bit 7),Standard Access Rights,4656
+%%1560,Unknown specific access (bit 8),Standard Access Rights,4656
+%%1561,Unknown specific access (bit 9),Standard Access Rights,4656
+%%1562,Unknown specific access (bit 10),Standard Access Rights,4656
+%%1563,Unknown specific access (bit 11),Standard Access Rights,4656
+%%1564,Unknown specific access (bit 12),Standard Access Rights,4656
+%%1565,Unknown specific access (bit 13),Standard Access Rights,4656
+%%1566,Unknown specific access (bit 14),Standard Access Rights,4656
+%%1567,Unknown specific access (bit 15),Standard Access Rights,4656
+%%1601,Not used,Privilege,4672
+%%1603,Assign Primary Token Privilege,Privilege,4672
+%%1604,Lock Memory Privilege,Privilege,4672
+%%1605,Increase Memory Quota Privilege,Privilege,4672
+%%1606,Unsolicited Input Privilege,Privilege,4672
+%%1607,Trusted Computer Base Privilege,Privilege,4672
+%%1608,Security Privilege,Privilege,4672
+%%1609,Take Ownership Privilege,Privilege,4672
+%%1610,Load/Unload Driver Privilege,Privilege,4672
+%%1611,Profile System Privilege,Privilege,4672
+%%1612,Set System Time Privilege,Privilege,4672
+%%1613,Profile Single Process Privilege,Privilege,4672
+%%1614,Increment Base Priority Privilege,Privilege,4672
+%%1615,Create Pagefile Privilege,Privilege,4672
+%%1616,Create Permanent Object Privilege,Privilege,4672
+%%1617,Backup Privilege,Privilege,4672
+%%1618,Restore From Backup Privilege,Privilege,4672
+%%1619,Shutdown System Privilege,Privilege,4672
+%%1620,Debug Privilege,Privilege,4672
+%%1621,View or Change Audit Log Privilege,Privilege,4672
+%%1622,Change Hardware Environment Privilege,Privilege,4672
+%%1623,Change Notify (and Traverse) Privilege,Privilege,4672
+%%1624,Remotely Shut System Down Privilege,Privilege,4672
+%%1792,"<value changed, but not displayed>",Audit Policy State,4719
+%%1793,<value not set>,Audit Policy State,4719
+%%1794,<never>,Audit Policy State,4719
+%%1795,Enabled,Audit Policy State,4719
+%%1796,Disabled,Audit Policy State,4719
+%%1797,All,Audit Policy State,4719
+%%1798,None,Audit Policy State,4719
+%%1799,Audit Policy query/set API Operation,Audit Policy State,4719
+%%1800,<Value change auditing for this registry type is not supported>,Registry Value Notice,4657
+%%1801,Granted by,Access Reason,4663
+%%1802,Denied by,Access Reason,4663
+%%1803,Denied by Integrity Policy check,Access Reason,4663
+%%1804,Granted by Ownership,Access Reason,4663
+%%1805,Not granted,Access Reason,4663
+%%1806,Granted by NULL DACL,Access Reason,4663
+%%1807,Denied by Empty DACL,Access Reason,4663
+%%1808,Granted by NULL Security Descriptor,Access Reason,4663
+%%1809,Unknown or unchecked,Access Reason,4663
+%%1810,Not granted due to missing,Access Reason,4663
+%%1811,Granted by ACE on parent folder,Access Reason,4663
+%%1812,Denied by ACE on parent folder,Access Reason,4663
+%%1813,Granted by Central Access Rule,Access Reason,4663
+%%1814,NOT Granted by Central Access Rule,Access Reason,4663
+%%1815,Granted by parent folder's Central Access Rule,Access Reason,4663
+%%1816,NOT Granted by parent folder's Central Access Rule,Access Reason,4663
+%%1817,Unknown Type,Value Type,4657
+%%1818,String,Value Type,4657
+%%1819,Unsigned 64-bit Integer,Value Type,4657
+%%1820,64-bit Integer,Value Type,4657
+%%1821,FQBN,Value Type,4657
+%%1822,Blob,Value Type,4657
+%%1823,Sid,Value Type,4657
+%%1824,Boolean,Boolean,5157
+%%1825,True,Boolean,5157
+%%1826,False,Boolean,5157
+%%1827,Invalid,Value Status,4663
+%%1828,an ACE too long to display,Value Status,4663
+%%1829,a Security Descriptor too long to display,Value Status,4663
+%%1830,Not granted to AppContainers,Access Reason,4663
+%%1831,...,Impersonation Level,4624
+%%1832,Identification,Impersonation Level,4624
+%%1833,Impersonation,Impersonation Level,4624
+%%1840,Delegation,Impersonation Level,4624
+%%1841,Denied by Process Trust Label ACE,Access Reason,4663
+%%1842,Yes,Boolean,4624
+%%1843,No,Boolean,4624
+%%1844,System,Setting Value,4719
+%%1845,Not Available,Setting Value,4719
+%%1846,Default,Setting Value,4719
+%%1847,DisallowMmConfig,Setting Value,4719
+%%1848,Off,Setting Value,4719
+%%1849,Auto,Setting Value,4719
+%%1856,Denied by Access Filter Ace,Access Reason,4663
+%%1872,REG_NONE,Registry Value Type,4657
+%%1873,REG_SZ,Registry Value Type,4657
+%%1874,REG_EXPAND_SZ,Registry Value Type,4657
+%%1875,REG_BINARY,Registry Value Type,4657
+%%1876,REG_DWORD,Registry Value Type,4657
+%%1877,REG_DWORD_BIG_ENDIAN,Registry Value Type,4657
+%%1878,REG_LINK,Registry Value Type,4657
+%%1879,REG_MULTI_SZ (New lines are replaced with *. A * is replaced with **),Registry Value Type,4657
+%%1880,REG_RESOURCE_LIST,Registry Value Type,4657
+%%1881,REG_FULL_RESOURCE_DESCRIPTOR,Registry Value Type,4657
+%%1882,REG_RESOURCE_REQUIREMENTS_LIST,Registry Value Type,4657
+%%1883,REG_QWORD,Registry Value Type,4657
+%%1904,New registry value created,Registry Action,4657
+%%1905,Existing registry value modified,Registry Action,4657
+%%1906,Registry value deleted,Registry Action,4657
+%%1920,Sunday,Day of Week,4739
+%%1921,Monday,Day of Week,4739
+%%1922,Tuesday,Day of Week,4739
+%%1923,Wednesday,Day of Week,4739
+%%1924,Thursday,Day of Week,4739
+%%1925,Friday,Day of Week,4739
+%%1926,Saturday,Day of Week,4739
+%%1936,TokenElevationTypeDefault (1),Token Elevation Type,4624
+%%1937,TokenElevationTypeFull (2),Token Elevation Type,4624
+%%1938,TokenElevationTypeLimited (3),Token Elevation Type,4624
+%%2048,Account Enabled,User Account Control,4720
+%%2049,'Home Directory Required' - Disabled,User Account Control,4720
+%%2050,'Password Not Required' - Disabled,User Account Control,4720
+%%2051,'Temp Duplicate Account' - Disabled,User Account Control,4720
+%%2052,'Normal Account' - Disabled,User Account Control,4720
+%%2053,'MNS Logon Account' - Disabled,User Account Control,4720
+%%2054,'Interdomain Trust Account' - Disabled,User Account Control,4720
+%%2055,'Workstation Trust Account' - Disabled,User Account Control,4720
+%%2056,'Server Trust Account' - Disabled,User Account Control,4720
+%%2057,"""Don't Expire Password"" - Disabled",User Account Control,4720
+%%2058,Account Unlocked,User Account Control,4720
+%%2059,'Encrypted Text Password Allowed' - Disabled,User Account Control,4720
+%%2060,'Smartcard Required' - Disabled,User Account Control,4720
+%%2061,'Trusted For Delegation' - Disabled,User Account Control,4720
+%%2062,'Not Delegated' - Disabled,User Account Control,4720
+%%2063,'Use DES Key Only' - Disabled,User Account Control,4720
+%%2064,"""Don't Require Preauth"" - Disabled",User Account Control,4720
+%%2065,'Password Expired' - Disabled,User Account Control,4720
+%%2066,'Trusted To Authenticate For Delegation' - Disabled,User Account Control,4720
+%%2067,'Exclude Authorization Information' - Disabled,User Account Control,4720
+%%2068,'Undefined UserAccountControl Bit 20' - Disabled,User Account Control,4720
+%%2069,'Protect Kerberos Service Tickets with AES Keys' - Disabled,User Account Control,4720
+%%2070,'Undefined UserAccountControl Bit 22' - Disabled,User Account Control,4720
+%%2071,'Undefined UserAccountControl Bit 23' - Disabled,User Account Control,4720
+%%2072,'Undefined UserAccountControl Bit 24' - Disabled,User Account Control,4720
+%%2073,'Undefined UserAccountControl Bit 25' - Disabled,User Account Control,4720
+%%2074,'Undefined UserAccountControl Bit 26' - Disabled,User Account Control,4720
+%%2075,'Undefined UserAccountControl Bit 27' - Disabled,User Account Control,4720
+%%2076,'Undefined UserAccountControl Bit 28' - Disabled,User Account Control,4720
+%%2077,'Undefined UserAccountControl Bit 29' - Disabled,User Account Control,4720
+%%2078,'Undefined UserAccountControl Bit 30' - Disabled,User Account Control,4720
+%%2079,'Undefined UserAccountControl Bit 31' - Disabled,User Account Control,4720
+%%2080,Account Disabled,User Account Control,4720
+%%2081,'Home Directory Required' - Enabled,User Account Control,4720
+%%2082,'Password Not Required' - Enabled,User Account Control,4720
+%%2083,'Temp Duplicate Account' - Enabled,User Account Control,4720
+%%2084,'Normal Account' - Enabled,User Account Control,4720
+%%2085,'MNS Logon Account' - Enabled,User Account Control,4720
+%%2086,'Interdomain Trust Account' - Enabled,User Account Control,4720
+%%2087,'Workstation Trust Account' - Enabled,User Account Control,4720
+%%2088,'Server Trust Account' - Enabled,User Account Control,4720
+%%2089,"""Don't Expire Password"" - Enabled",User Account Control,4720
+%%2090,Account Locked,User Account Control,4720
+%%2091,'Encrypted Text Password Allowed' - Enabled,User Account Control,4720
+%%2092,'Smartcard Required' - Enabled,User Account Control,4720
+%%2093,'Trusted For Delegation' - Enabled,User Account Control,4720
+%%2094,'Not Delegated' - Enabled,User Account Control,4720
+%%2095,'Use DES Key Only' - Enabled,User Account Control,4720
+%%2096,"""Don't Require Preauth"" - Enabled",User Account Control,4720
+%%2097,'Password Expired' - Enabled,User Account Control,4720
+%%2098,'Trusted To Authenticate For Delegation' - Enabled,User Account Control,4720
+%%2099,'Exclude Authorization Information' - Enabled,User Account Control,4720
+%%2100,'Undefined UserAccountControl Bit 20' - Enabled,User Account Control,4720
+%%2101,'Protect Kerberos Service Tickets with AES Keys' - Enabled,User Account Control,4720
+%%2102,'Undefined UserAccountControl Bit 22' - Enabled,User Account Control,4720
+%%2103,'Undefined UserAccountControl Bit 23' - Enabled,User Account Control,4720
+%%2104,'Undefined UserAccountControl Bit 24' - Enabled,User Account Control,4720
+%%2105,'Undefined UserAccountControl Bit 25' - Enabled,User Account Control,4720
+%%2106,'Undefined UserAccountControl Bit 26' - Enabled,User Account Control,4720
+%%2107,'Undefined UserAccountControl Bit 27' - Enabled,User Account Control,4720
+%%2108,'Undefined UserAccountControl Bit 28' - Enabled,User Account Control,4720
+%%2109,'Undefined UserAccountControl Bit 29' - Enabled,User Account Control,4720
+%%2110,'Undefined UserAccountControl Bit 30' - Enabled,User Account Control,4720
+%%2111,'Undefined UserAccountControl Bit 31' - Enabled,User Account Control,4720
+%%2304,An Error occured during Logon.,Logon Failure Reason,4625
+%%2305,The specified user account has expired.,Logon Failure Reason,4625
+%%2306,The NetLogon component is not active.,Logon Failure Reason,4625
+%%2307,Account locked out.,Logon Failure Reason,4625
+%%2308,The user has not been granted the requested logon type at this machine.,Logon Failure Reason,4625
+%%2309,The specified account's password has expired.,Logon Failure Reason,4625
+%%2310,Account currently disabled.,Logon Failure Reason,4625
+%%2311,Account logon time restriction violation.,Logon Failure Reason,4625
+%%2312,User not allowed to logon at this computer.,Logon Failure Reason,4625
+%%2313,Unknown user name or bad password.,Logon Failure Reason,4625
+%%2314,Domain sid inconsistent.,Logon Failure Reason,4625
+%%2315,Smartcard logon is required and was not used.,Logon Failure Reason,4625
+%%2432,Not Available.,Cryptographic Operation,5061
+%%2436,Random number generator failure.,Cryptographic Operation,5061
+%%2437,Random number generation failed FIPS-140 pre-hash check.,Cryptographic Operation,5061
+%%2438,Failed to zero secret data.,Cryptographic Operation,5061
+%%2439,Key failed pair wise consistency check.,Cryptographic Operation,5061
+%%2448,Failed to unprotect persistent cryptographic key.,Cryptographic Operation,5061
+%%2449,Key export checks failed.,Cryptographic Operation,5061
+%%2450,Validation of public key failed.,Cryptographic Operation,5061
+%%2451,Signature verification failed.,Cryptographic Operation,5061
+%%2456,Open key file.,Cryptographic Operation,5061
+%%2457,Delete key file.,Cryptographic Operation,5061
+%%2458,Read persisted key from file.,Cryptographic Operation,5061
+%%2459,Write persisted key to file.,Cryptographic Operation,5061
+%%2464,Export of persistent cryptographic key.,Cryptographic Operation,5061
+%%2465,Import of persistent cryptographic key.,Cryptographic Operation,5061
+%%2480,Open Key.,Cryptographic Operation,5061
+%%2481,Create Key.,Cryptographic Operation,5061
+%%2482,Delete Key.,Cryptographic Operation,5061
+%%2483,Encrypt.,Cryptographic Operation,5061
+%%2484,Decrypt.,Cryptographic Operation,5061
+%%2485,Sign hash.,Cryptographic Operation,5061
+%%2486,Secret agreement.,Cryptographic Operation,5061
+%%2487,Domain settings,Cryptographic Operation,5061
+%%2488,Local settings,Cryptographic Operation,5061
+%%2489,Add provider.,Cryptographic Operation,5061
+%%2490,Remove provider.,Cryptographic Operation,5061
+%%2491,Add context.,Cryptographic Operation,5061
+%%2492,Remove context.,Cryptographic Operation,5061
+%%2493,Add function.,Cryptographic Operation,5061
+%%2494,Remove function.,Cryptographic Operation,5061
+%%2495,Add function provider.,Cryptographic Operation,5061
+%%2496,Remove function provider.,Cryptographic Operation,5061
+%%2497,Add function property.,Cryptographic Operation,5061
+%%2498,Remove function property.,Cryptographic Operation,5061
+%%2499,Machine key.,Cryptographic Operation,5061
+%%2500,User key.,Cryptographic Operation,5061
+%%2501,Key Derivation.,Cryptographic Operation,5061
+%%2502,Claim Creation.,Cryptographic Operation,5061
+%%2503,Claim Verification.,Cryptographic Operation,5061
+%%4352,Device Access Bit 0,Device Access Rights,4656
+%%4353,Device Access Bit 1,Device Access Rights,4656
+%%4354,Device Access Bit 2,Device Access Rights,4656
+%%4355,Device Access Bit 3,Device Access Rights,4656
+%%4356,Device Access Bit 4,Device Access Rights,4656
+%%4357,Device Access Bit 5,Device Access Rights,4656
+%%4358,Device Access Bit 6,Device Access Rights,4656
+%%4359,Device Access Bit 7,Device Access Rights,4656
+%%4360,Device Access Bit 8,Device Access Rights,4656
+%%4361,Undefined Access (no effect) Bit 9,Device Access Rights,4656
+%%4362,Undefined Access (no effect) Bit 10,Device Access Rights,4656
+%%4363,Undefined Access (no effect) Bit 11,Device Access Rights,4656
+%%4364,Undefined Access (no effect) Bit 12,Device Access Rights,4656
+%%4365,Undefined Access (no effect) Bit 13,Device Access Rights,4656
+%%4366,Undefined Access (no effect) Bit 14,Device Access Rights,4656
+%%4367,Undefined Access (no effect) Bit 15,Device Access Rights,4656
+%%4368,Query directory,Directory Access Rights,4656
+%%4369,Traverse,Directory Access Rights,4656
+%%4370,Create object in directory,Directory Access Rights,4656
+%%4371,Create sub-directory,Directory Access Rights,4656
+%%4372,Undefined Access (no effect) Bit 4,Directory Access Rights,4656
+%%4373,Undefined Access (no effect) Bit 5,Directory Access Rights,4656
+%%4374,Undefined Access (no effect) Bit 6,Directory Access Rights,4656
+%%4375,Undefined Access (no effect) Bit 7,Directory Access Rights,4656
+%%4376,Undefined Access (no effect) Bit 8,Directory Access Rights,4656
+%%4377,Undefined Access (no effect) Bit 9,Directory Access Rights,4656
+%%4378,Undefined Access (no effect) Bit 10,Directory Access Rights,4656
+%%4379,Undefined Access (no effect) Bit 11,Directory Access Rights,4656
+%%4380,Undefined Access (no effect) Bit 12,Directory Access Rights,4656
+%%4381,Undefined Access (no effect) Bit 13,Directory Access Rights,4656
+%%4382,Undefined Access (no effect) Bit 14,Directory Access Rights,4656
+%%4383,Undefined Access (no effect) Bit 15,Directory Access Rights,4656
+%%4384,Query event state,Event Object Access Rights,4656
+%%4385,Modify event state,Event Object Access Rights,4656
+%%4386,Undefined Access (no effect) Bit 2,Event Object Access Rights,4656
+%%4387,Undefined Access (no effect) Bit 3,Event Object Access Rights,4656
+%%4388,Undefined Access (no effect) Bit 4,Event Object Access Rights,4656
+%%4389,Undefined Access (no effect) Bit 5,Event Object Access Rights,4656
+%%4390,Undefined Access (no effect) Bit 6,Event Object Access Rights,4656
+%%4391,Undefined Access (no effect) Bit 7,Event Object Access Rights,4656
+%%4392,Undefined Access (no effect) Bit 8,Event Object Access Rights,4656
+%%4393,Undefined Access (no effect) Bit 9,Event Object Access Rights,4656
+%%4394,Undefined Access (no effect) Bit 10,Event Object Access Rights,4656
+%%4395,Undefined Access (no effect) Bit 11,Event Object Access Rights,4656
+%%4396,Undefined Access (no effect) Bit 12,Event Object Access Rights,4656
+%%4397,Undefined Access (no effect) Bit 13,Event Object Access Rights,4656
+%%4398,Undefined Access (no effect) Bit 14,Event Object Access Rights,4656
+%%4399,Undefined Access (no effect) Bit 15,Event Object Access Rights,4656
+%%4416,ReadData (or ListDirectory),File Access Rights,4663
+%%4417,WriteData (or AddFile),File Access Rights,4663
+%%4418,AppendData (or AddSubdirectory or CreatePipeInstance),File Access Rights,4663
+%%4419,ReadEA,File Access Rights,4663
+%%4420,WriteEA,File Access Rights,4663
+%%4421,Execute/Traverse,File Access Rights,4663
+%%4422,DeleteChild,File Access Rights,4663
+%%4423,ReadAttributes,File Access Rights,4663
+%%4424,WriteAttributes,File Access Rights,4663
+%%4425,Undefined Access (no effect) Bit 9,File Access Rights,4663
+%%4426,Undefined Access (no effect) Bit 10,File Access Rights,4663
+%%4427,Undefined Access (no effect) Bit 11,File Access Rights,4663
+%%4428,Undefined Access (no effect) Bit 12,File Access Rights,4663
+%%4429,Undefined Access (no effect) Bit 13,File Access Rights,4663
+%%4430,Undefined Access (no effect) Bit 14,File Access Rights,4663
+%%4431,Undefined Access (no effect) Bit 15,File Access Rights,4663
+%%4432,Query key value,Registry Key Access Rights,4663
+%%4433,Set key value,Registry Key Access Rights,4663
+%%4434,Create sub-key,Registry Key Access Rights,4663
+%%4435,Enumerate sub-keys,Registry Key Access Rights,4663
+%%4436,Notify about changes to keys,Registry Key Access Rights,4663
+%%4437,Create Link,Registry Key Access Rights,4663
+%%4438,Undefined Access (no effect) Bit 6,Registry Key Access Rights,4663
+%%4439,Undefined Access (no effect) Bit 7,Registry Key Access Rights,4663
+%%4440,Enable 64(or 32) bit application to open 64 bit key,Registry Key Access Rights,4663
+%%4441,Enable 64(or 32) bit application to open 32 bit key,Registry Key Access Rights,4663
+%%4442,Undefined Access (no effect) Bit 10,Registry Key Access Rights,4663
+%%4443,Undefined Access (no effect) Bit 11,Registry Key Access Rights,4663
+%%4444,Undefined Access (no effect) Bit 12,Registry Key Access Rights,4663
+%%4445,Undefined Access (no effect) Bit 13,Registry Key Access Rights,4663
+%%4446,Undefined Access (no effect) Bit 14,Registry Key Access Rights,4663
+%%4447,Undefined Access (no effect) Bit 15,Registry Key Access Rights,4663
+%%4448,Query mutant state,Mutant Access Rights,4656
+%%4449,Undefined Access (no effect) Bit 1,Mutant Access Rights,4656
+%%4450,Undefined Access (no effect) Bit 2,Mutant Access Rights,4656
+%%4451,Undefined Access (no effect) Bit 3,Mutant Access Rights,4656
+%%4452,Undefined Access (no effect) Bit 4,Mutant Access Rights,4656
+%%4453,Undefined Access (no effect) Bit 5,Mutant Access Rights,4656
+%%4454,Undefined Access (no effect) Bit 6,Mutant Access Rights,4656
+%%4455,Undefined Access (no effect) Bit 7,Mutant Access Rights,4656
+%%4456,Undefined Access (no effect) Bit 8,Mutant Access Rights,4656
+%%4457,Undefined Access (no effect) Bit 9,Mutant Access Rights,4656
+%%4458,Undefined Access (no effect) Bit 10,Mutant Access Rights,4656
+%%4459,Undefined Access (no effect) Bit 11,Mutant Access Rights,4656
+%%4460,Undefined Access (no effect) Bit 12,Mutant Access Rights,4656
+%%4461,Undefined Access (no effect) Bit 13,Mutant Access Rights,4656
+%%4462,Undefined Access (no effect) Bit 14,Mutant Access Rights,4656
+%%4463,Undefined Access (no effect) Bit 15,Mutant Access Rights,4656
+%%4464,Communicate using port,Port Access Rights,4656
+%%4465,Undefined Access (no effect) Bit 1,Port Access Rights,4656
+%%4466,Undefined Access (no effect) Bit 2,Port Access Rights,4656
+%%4467,Undefined Access (no effect) Bit 3,Port Access Rights,4656
+%%4468,Undefined Access (no effect) Bit 4,Port Access Rights,4656
+%%4469,Undefined Access (no effect) Bit 5,Port Access Rights,4656
+%%4470,Undefined Access (no effect) Bit 6,Port Access Rights,4656
+%%4471,Undefined Access (no effect) Bit 7,Port Access Rights,4656
+%%4472,Undefined Access (no effect) Bit 8,Port Access Rights,4656
+%%4473,Undefined Access (no effect) Bit 9,Port Access Rights,4656
+%%4474,Undefined Access (no effect) Bit 10,Port Access Rights,4656
+%%4475,Undefined Access (no effect) Bit 11,Port Access Rights,4656
+%%4476,Undefined Access (no effect) Bit 12,Port Access Rights,4656
+%%4477,Undefined Access (no effect) Bit 13,Port Access Rights,4656
+%%4478,Undefined Access (no effect) Bit 14,Port Access Rights,4656
+%%4479,Undefined Access (no effect) Bit 15,Port Access Rights,4656
+%%4480,Force process termination,Process Access Rights,4656
+%%4481,Create new thread in process,Process Access Rights,4656
+%%4482,Set process session ID,Process Access Rights,4656
+%%4483,Perform virtual memory operation,Process Access Rights,4656
+%%4484,Read from process memory,Process Access Rights,4656
+%%4485,Write to process memory,Process Access Rights,4656
+%%4486,Duplicate handle into or out of process,Process Access Rights,4656
+%%4487,Create a subprocess of process,Process Access Rights,4656
+%%4488,Set process quotas,Process Access Rights,4656
+%%4489,Set process information,Process Access Rights,4656
+%%4490,Query process information,Process Access Rights,4656
+%%4491,Set process termination port,Process Access Rights,4656
+%%4492,Undefined Access (no effect) Bit 12,Process Access Rights,4656
+%%4493,Undefined Access (no effect) Bit 13,Process Access Rights,4656
+%%4494,Undefined Access (no effect) Bit 14,Process Access Rights,4656
+%%4495,Undefined Access (no effect) Bit 15,Process Access Rights,4656
+%%4496,Control profile,Profile Access Rights,4656
+%%4497,Undefined Access (no effect) Bit 1,Profile Access Rights,4656
+%%4498,Undefined Access (no effect) Bit 2,Profile Access Rights,4656
+%%4499,Undefined Access (no effect) Bit 3,Profile Access Rights,4656
+%%4500,Undefined Access (no effect) Bit 4,Profile Access Rights,4656
+%%4501,Undefined Access (no effect) Bit 5,Profile Access Rights,4656
+%%4502,Undefined Access (no effect) Bit 6,Profile Access Rights,4656
+%%4503,Undefined Access (no effect) Bit 7,Profile Access Rights,4656
+%%4504,Undefined Access (no effect) Bit 8,Profile Access Rights,4656
+%%4505,Undefined Access (no effect) Bit 9,Profile Access Rights,4656
+%%4506,Undefined Access (no effect) Bit 10,Profile Access Rights,4656
+%%4507,Undefined Access (no effect) Bit 11,Profile Access Rights,4656
+%%4508,Undefined Access (no effect) Bit 12,Profile Access Rights,4656
+%%4509,Undefined Access (no effect) Bit 13,Profile Access Rights,4656
+%%4510,Undefined Access (no effect) Bit 14,Profile Access Rights,4656
+%%4511,Undefined Access (no effect) Bit 15,Profile Access Rights,4656
+%%4512,Query section state,Section Access Rights,4656
+%%4513,Map section for write,Section Access Rights,4656
+%%4514,Map section for read,Section Access Rights,4656
+%%4515,Map section for execute,Section Access Rights,4656
+%%4516,Extend size,Section Access Rights,4656
+%%4517,Undefined Access (no effect) Bit 5,Section Access Rights,4656
+%%4518,Undefined Access (no effect) Bit 6,Section Access Rights,4656
+%%4519,Undefined Access (no effect) Bit 7,Section Access Rights,4656
+%%4520,Undefined Access (no effect) Bit 8,Section Access Rights,4656
+%%4521,Undefined Access (no effect) Bit 9,Section Access Rights,4656
+%%4522,Undefined Access (no effect) Bit 10,Section Access Rights,4656
+%%4523,Undefined Access (no effect) Bit 11,Section Access Rights,4656
+%%4524,Undefined Access (no effect) Bit 12,Section Access Rights,4656
+%%4525,Undefined Access (no effect) Bit 13,Section Access Rights,4656
+%%4526,Undefined Access (no effect) Bit 14,Section Access Rights,4656
+%%4527,Undefined Access (no effect) Bit 15,Section Access Rights,4656
+%%4528,Query semaphore state,Semaphore Access Rights,4656
+%%4529,Modify semaphore state,Semaphore Access Rights,4656
+%%4530,Undefined Access (no effect) Bit 2,Semaphore Access Rights,4656
+%%4531,Undefined Access (no effect) Bit 3,Semaphore Access Rights,4656
+%%4532,Undefined Access (no effect) Bit 4,Semaphore Access Rights,4656
+%%4533,Undefined Access (no effect) Bit 5,Semaphore Access Rights,4656
+%%4534,Undefined Access (no effect) Bit 6,Semaphore Access Rights,4656
+%%4535,Undefined Access (no effect) Bit 7,Semaphore Access Rights,4656
+%%4536,Undefined Access (no effect) Bit 8,Semaphore Access Rights,4656
+%%4537,Undefined Access (no effect) Bit 9,Semaphore Access Rights,4656
+%%4538,Undefined Access (no effect) Bit 10,Semaphore Access Rights,4656
+%%4539,Undefined Access (no effect) Bit 11,Semaphore Access Rights,4656
+%%4540,Undefined Access (no effect) Bit 12,Semaphore Access Rights,4656
+%%4541,Undefined Access (no effect) Bit 13,Semaphore Access Rights,4656
+%%4542,Undefined Access (no effect) Bit 14,Semaphore Access Rights,4656
+%%4543,Undefined Access (no effect) Bit 15,Semaphore Access Rights,4656
+%%4544,Use symbolic link,Symbolic Link Access Rights,4656
+%%4545,Undefined Access (no effect) Bit 1,Symbolic Link Access Rights,4656
+%%4546,Undefined Access (no effect) Bit 2,Symbolic Link Access Rights,4656
+%%4547,Undefined Access (no effect) Bit 3,Symbolic Link Access Rights,4656
+%%4548,Undefined Access (no effect) Bit 4,Symbolic Link Access Rights,4656
+%%4549,Undefined Access (no effect) Bit 5,Symbolic Link Access Rights,4656
+%%4550,Undefined Access (no effect) Bit 6,Symbolic Link Access Rights,4656
+%%4551,Undefined Access (no effect) Bit 7,Symbolic Link Access Rights,4656
+%%4552,Undefined Access (no effect) Bit 8,Symbolic Link Access Rights,4656
+%%4553,Undefined Access (no effect) Bit 9,Symbolic Link Access Rights,4656
+%%4554,Undefined Access (no effect) Bit 10,Symbolic Link Access Rights,4656
+%%4555,Undefined Access (no effect) Bit 11,Symbolic Link Access Rights,4656
+%%4556,Undefined Access (no effect) Bit 12,Symbolic Link Access Rights,4656
+%%4557,Undefined Access (no effect) Bit 13,Symbolic Link Access Rights,4656
+%%4558,Undefined Access (no effect) Bit 14,Symbolic Link Access Rights,4656
+%%4559,Undefined Access (no effect) Bit 15,Symbolic Link Access Rights,4656
+%%4560,Force thread termination,Thread Access Rights,4656
+%%4561,Suspend or resume thread,Thread Access Rights,4656
+%%4562,Send an alert to thread,Thread Access Rights,4656
+%%4563,Get thread context,Thread Access Rights,4656
+%%4564,Set thread context,Thread Access Rights,4656
+%%4565,Set thread information,Thread Access Rights,4656
+%%4566,Query thread information,Thread Access Rights,4656
+%%4567,Assign a token to the thread,Thread Access Rights,4656
+%%4568,Cause thread to directly impersonate another thread,Thread Access Rights,4656
+%%4569,Directly impersonate this thread,Thread Access Rights,4656
+%%4570,Undefined Access (no effect) Bit 10,Thread Access Rights,4656
+%%4571,Undefined Access (no effect) Bit 11,Thread Access Rights,4656
+%%4572,Undefined Access (no effect) Bit 12,Thread Access Rights,4656
+%%4573,Undefined Access (no effect) Bit 13,Thread Access Rights,4656
+%%4574,Undefined Access (no effect) Bit 14,Thread Access Rights,4656
+%%4575,Undefined Access (no effect) Bit 15,Thread Access Rights,4656
+%%4576,Query timer state,Timer Access Rights,4656
+%%4577,Modify timer state,Timer Access Rights,4656
+%%4578,Undefined Access (no effect) Bit 2,Timer Access Rights,4656
+%%4579,Undefined Access (no effect) Bit 3,Timer Access Rights,4656
+%%4580,Undefined Access (no effect) Bit 4,Timer Access Rights,4656
+%%4581,Undefined Access (no effect) Bit 5,Timer Access Rights,4656
+%%4582,Undefined Access (no effect) Bit 6,Timer Access Rights,4656
+%%4584,Undefined Access (no effect) Bit 8,Timer Access Rights,4656
+%%4585,Undefined Access (no effect) Bit 9,Timer Access Rights,4656
+%%4586,Undefined Access (no effect) Bit 10,Timer Access Rights,4656
+%%4587,Undefined Access (no effect) Bit 11,Timer Access Rights,4656
+%%4588,Undefined Access (no effect) Bit 12,Timer Access Rights,4656
+%%4589,Undefined Access (no effect) Bit 13,Timer Access Rights,4656
+%%4590,Undefined Access (no effect) Bit 14,Timer Access Rights,4656
+%%4591,Undefined Access (no effect) Bit 15,Timer Access Rights,4656
+%%4592,AssignAsPrimary,Token Access Rights,4656
+%%4593,Duplicate,Token Access Rights,4656
+%%4594,Impersonate,Token Access Rights,4656
+%%4595,Query,Token Access Rights,4656
+%%4596,QuerySource,Token Access Rights,4656
+%%4597,AdjustPrivileges,Token Access Rights,4656
+%%4598,AdjustGroups,Token Access Rights,4656
+%%4599,AdjustDefaultDacl,Token Access Rights,4656
+%%4600,AdjustSessionID,Token Access Rights,4656
+%%4601,Undefined Access (no effect) Bit 9,Token Access Rights,4656
+%%4602,Undefined Access (no effect) Bit 10,Token Access Rights,4656
+%%4603,Undefined Access (no effect) Bit 11,Token Access Rights,4656
+%%4604,Undefined Access (no effect) Bit 12,Token Access Rights,4656
+%%4605,Undefined Access (no effect) Bit 13,Token Access Rights,4656
+%%4606,Undefined Access (no effect) Bit 14,Token Access Rights,4656
+%%4607,Undefined Access (no effect) Bit 15,Token Access Rights,4656
+%%4608,Create instance of object type,Type Access Rights,4656
+%%4609,Undefined Access (no effect) Bit 1,Type Access Rights,4656
+%%4610,Undefined Access (no effect) Bit 2,Type Access Rights,4656
+%%4611,Undefined Access (no effect) Bit 3,Type Access Rights,4656
+%%4612,Undefined Access (no effect) Bit 4,Type Access Rights,4656
+%%4613,Undefined Access (no effect) Bit 5,Type Access Rights,4656
+%%4614,Undefined Access (no effect) Bit 6,Type Access Rights,4656
+%%4615,Undefined Access (no effect) Bit 7,Type Access Rights,4656
+%%4616,Undefined Access (no effect) Bit 8,Type Access Rights,4656
+%%4617,Undefined Access (no effect) Bit 9,Type Access Rights,4656
+%%4618,Undefined Access (no effect) Bit 10,Type Access Rights,4656
+%%4619,Undefined Access (no effect) Bit 11,Type Access Rights,4656
+%%4620,Undefined Access (no effect) Bit 12,Type Access Rights,4656
+%%4621,Undefined Access (no effect) Bit 13,Type Access Rights,4656
+%%4622,Undefined Access (no effect) Bit 14,Type Access Rights,4656
+%%4623,Undefined Access (no effect) Bit 15,Type Access Rights,4656
+%%4864,Query State,Object State,4656
+%%4865,Modify State,Object State,4656
+%%5120,Channel read message,Channel Access Rights,4656
+%%5121,Channel write message,Channel Access Rights,4656
+%%5122,Channel query information,Channel Access Rights,4656
+%%5123,Channel set information,Channel Access Rights,4656
+%%5124,Undefined Access (no effect) Bit 4,Channel Access Rights,4656
+%%5125,Undefined Access (no effect) Bit 5,Channel Access Rights,4656
+%%5126,Undefined Access (no effect) Bit 6,Channel Access Rights,4656
+%%5127,Undefined Access (no effect) Bit 7,Channel Access Rights,4656
+%%5128,Undefined Access (no effect) Bit 8,Channel Access Rights,4656
+%%5129,Undefined Access (no effect) Bit 9,Channel Access Rights,4656
+%%5130,Undefined Access (no effect) Bit 10,Channel Access Rights,4656
+%%5131,Undefined Access (no effect) Bit 11,Channel Access Rights,4656
+%%5132,Undefined Access (no effect) Bit 12,Channel Access Rights,4656
+%%5133,Undefined Access (no effect) Bit 13,Channel Access Rights,4656
+%%5134,Undefined Access (no effect) Bit 14,Channel Access Rights,4656
+%%5135,Undefined Access (no effect) Bit 15,Channel Access Rights,4656
+%%5136,Assign process,Job Access Rights,4656
+%%5137,Set Attributes,Job Access Rights,4656
+%%5138,Query Attributes,Job Access Rights,4656
+%%5139,Terminate Job,Job Access Rights,4656
+%%5140,Set Security Attributes,Job Access Rights,4656
+%%5141,Undefined Access (no effect) Bit 5,Job Access Rights,4656
+%%5142,Undefined Access (no effect) Bit 6,Job Access Rights,4656
+%%5143,Undefined Access (no effect) Bit 7,Job Access Rights,4656
+%%5144,Undefined Access (no effect) Bit 8,Job Access Rights,4656
+%%5145,Undefined Access (no effect) Bit 9,Job Access Rights,4656
+%%5146,Undefined Access (no effect) Bit 10,Job Access Rights,4656
+%%5147,Undefined Access (no effect) Bit 11,Job Access Rights,4656
+%%5148,Undefined Access (no effect) Bit 12,Job Access Rights,4656
+%%5149,Undefined Access (no effect) Bit 13,Job Access Rights,4656
+%%5150,Undefined Access (no effect) Bit 14,Job Access Rights,4656
+%%5151,Undefined Access (no effect) Bit 15,Job Access Rights,4656
+%%5376,ConnectToServer,SAM Server Access Rights,4661
+%%5377,ShutdownServer,SAM Server Access Rights,4661
+%%5378,InitializeServer,SAM Server Access Rights,4661
+%%5379,CreateDomain,SAM Server Access Rights,4661
+%%5380,EnumerateDomains,SAM Server Access Rights,4661
+%%5381,LookupDomain,SAM Server Access Rights,4661
+%%5382,Undefined Access (no effect) Bit 6,SAM Server Access Rights,4661
+%%5383,Undefined Access (no effect) Bit 7,SAM Server Access Rights,4661
+%%5384,Undefined Access (no effect) Bit 8,SAM Server Access Rights,4661
+%%5385,Undefined Access (no effect) Bit 9,SAM Server Access Rights,4661
+%%5386,Undefined Access (no effect) Bit 10,SAM Server Access Rights,4661
+%%5387,Undefined Access (no effect) Bit 11,SAM Server Access Rights,4661
+%%5388,Undefined Access (no effect) Bit 12,SAM Server Access Rights,4661
+%%5389,Undefined Access (no effect) Bit 13,SAM Server Access Rights,4661
+%%5390,Undefined Access (no effect) Bit 14,SAM Server Access Rights,4661
+%%5391,Undefined Access (no effect) Bit 15,SAM Server Access Rights,4661
+%%5392,ReadPasswordParameters,SAM Domain Access Rights,4661
+%%5393,WritePasswordParameters,SAM Domain Access Rights,4661
+%%5394,ReadOtherParameters,SAM Domain Access Rights,4661
+%%5395,WriteOtherParameters,SAM Domain Access Rights,4661
+%%5396,CreateUser,SAM Domain Access Rights,4661
+%%5397,CreateGlobalGroup,SAM Domain Access Rights,4661
+%%5398,CreateLocalGroup,SAM Domain Access Rights,4661
+%%5399,GetLocalGroupMembership,SAM Domain Access Rights,4661
+%%5400,ListAccounts,SAM Domain Access Rights,4661
+%%5401,LookupIDs,SAM Domain Access Rights,4661
+%%5402,AdministerServer,SAM Domain Access Rights,4661
+%%5403,Undefined Access (no effect) Bit 11,SAM Domain Access Rights,4661
+%%5404,Undefined Access (no effect) Bit 12,SAM Domain Access Rights,4661
+%%5405,Undefined Access (no effect) Bit 13,SAM Domain Access Rights,4661
+%%5406,Undefined Access (no effect) Bit 14,SAM Domain Access Rights,4661
+%%5407,Undefined Access (no effect) Bit 15,SAM Domain Access Rights,4661
+%%5408,ReadInformation,SAM Group Access Rights,4661
+%%5409,WriteAccount,SAM Group Access Rights,4661
+%%5410,AddMember,SAM Group Access Rights,4661
+%%5411,RemoveMember,SAM Group Access Rights,4661
+%%5412,ListMembers,SAM Group Access Rights,4661
+%%5413,Undefined Access (no effect) Bit 5,SAM Group Access Rights,4661
+%%5414,Undefined Access (no effect) Bit 6,SAM Group Access Rights,4661
+%%5415,Undefined Access (no effect) Bit 7,SAM Group Access Rights,4661
+%%5416,Undefined Access (no effect) Bit 8,SAM Group Access Rights,4661
+%%5417,Undefined Access (no effect) Bit 9,SAM Group Access Rights,4661
+%%5418,Undefined Access (no effect) Bit 10,SAM Group Access Rights,4661
+%%5419,Undefined Access (no effect) Bit 11,SAM Group Access Rights,4661
+%%5420,Undefined Access (no effect) Bit 12,SAM Group Access Rights,4661
+%%5421,Undefined Access (no effect) Bit 13,SAM Group Access Rights,4661
+%%5422,Undefined Access (no effect) Bit 14,SAM Group Access Rights,4661
+%%5423,Undefined Access (no effect) Bit 15,SAM Group Access Rights,4661
+%%5424,AddMember,SAM Alias Access Rights,4661
+%%5425,RemoveMember,SAM Alias Access Rights,4661
+%%5426,ListMembers,SAM Alias Access Rights,4661
+%%5427,ReadInformation,SAM Alias Access Rights,4661
+%%5428,WriteAccount,SAM Alias Access Rights,4661
+%%5429,Undefined Access (no effect) Bit 5,SAM Alias Access Rights,4661
+%%5430,Undefined Access (no effect) Bit 6,SAM Alias Access Rights,4661
+%%5431,Undefined Access (no effect) Bit 7,SAM Alias Access Rights,4661
+%%5432,Undefined Access (no effect) Bit 8,SAM Alias Access Rights,4661
+%%5433,Undefined Access (no effect) Bit 9,SAM Alias Access Rights,4661
+%%5434,Undefined Access (no effect) Bit 10,SAM Alias Access Rights,4661
+%%5435,Undefined Access (no effect) Bit 11,SAM Alias Access Rights,4661
+%%5436,Undefined Access (no effect) Bit 12,SAM Alias Access Rights,4661
+%%5437,Undefined Access (no effect) Bit 13,SAM Alias Access Rights,4661
+%%5438,Undefined Access (no effect) Bit 14,SAM Alias Access Rights,4661
+%%5439,Undefined Access (no effect) Bit 15,SAM Alias Access Rights,4661
+%%5440,ReadGeneralInformation,SAM User Access Rights,4661
+%%5441,ReadPreferences,SAM User Access Rights,4661
+%%5442,WritePreferences,SAM User Access Rights,4661
+%%5443,ReadLogon,SAM User Access Rights,4661
+%%5444,ReadAccount,SAM User Access Rights,4661
+%%5445,WriteAccount,SAM User Access Rights,4661
+%%5446,ChangePassword (with knowledge of old password),SAM User Access Rights,4661
+%%5447,SetPassword (without knowledge of old password),SAM User Access Rights,4661
+%%5448,ListGroups,SAM User Access Rights,4661
+%%5449,ReadGroupMembership,SAM User Access Rights,4661
+%%5450,ChangeGroupMembership,SAM User Access Rights,4661
+%%5451,Undefined Access (no effect) Bit 11,SAM User Access Rights,4661
+%%5452,Undefined Access (no effect) Bit 12,SAM User Access Rights,4661
+%%5453,Undefined Access (no effect) Bit 13,SAM User Access Rights,4661
+%%5454,Undefined Access (no effect) Bit 14,SAM User Access Rights,4661
+%%5455,Undefined Access (no effect) Bit 15,SAM User Access Rights,4661
+%%5632,View non-sensitive policy information,LSA Policy Access Rights,4661
+%%5633,View system audit requirements,LSA Policy Access Rights,4661
+%%5634,Get sensitive policy information,LSA Policy Access Rights,4661
+%%5635,Modify domain trust relationships,LSA Policy Access Rights,4661
+%%5636,Create special accounts (for assignment of user rights),LSA Policy Access Rights,4661
+%%5637,Create a secret object,LSA Policy Access Rights,4661
+%%5638,Create a privilege,LSA Policy Access Rights,4661
+%%5639,Set default quota limits,LSA Policy Access Rights,4661
+%%5640,Change system audit requirements,LSA Policy Access Rights,4661
+%%5641,Administer audit log attributes,LSA Policy Access Rights,4661
+%%5642,Enable/Disable LSA,LSA Policy Access Rights,4661
+%%5643,Lookup Names/SIDs,LSA Policy Access Rights,4661
+%%5648,Change secret value,LSA Secret Access Rights,4661
+%%5649,Query secret value,LSA Secret Access Rights,4661
+%%5650,Undefined Access (no effect) Bit 2,LSA Secret Access Rights,4661
+%%5651,Undefined Access (no effect) Bit 3,LSA Secret Access Rights,4661
+%%5652,Undefined Access (no effect) Bit 4,LSA Secret Access Rights,4661
+%%5653,Undefined Access (no effect) Bit 5,LSA Secret Access Rights,4661
+%%5654,Undefined Access (no effect) Bit 6,LSA Secret Access Rights,4661
+%%5655,Undefined Access (no effect) Bit 7,LSA Secret Access Rights,4661
+%%5656,Undefined Access (no effect) Bit 8,LSA Secret Access Rights,4661
+%%5657,Undefined Access (no effect) Bit 9,LSA Secret Access Rights,4661
+%%5658,Undefined Access (no effect) Bit 10,LSA Secret Access Rights,4661
+%%5659,Undefined Access (no effect) Bit 11,LSA Secret Access Rights,4661
+%%5660,Undefined Access (no effect) Bit 12,LSA Secret Access Rights,4661
+%%5661,Undefined Access (no effect) Bit 13,LSA Secret Access Rights,4661
+%%5662,Undefined Access (no effect) Bit 14,LSA Secret Access Rights,4661
+%%5663,Undefined Access (no effect) Bit 15,LSA Secret Access Rights,4661
+%%5664,Query trusted domain name/SID,LSA Trusted Domain Access Rights,4661
+%%5665,Retrieve the controllers in the trusted domain,LSA Trusted Domain Access Rights,4661
+%%5666,Change the controllers in the trusted domain,LSA Trusted Domain Access Rights,4661
+%%5667,Query the Posix ID offset assigned to the trusted domain,LSA Trusted Domain Access Rights,4661
+%%5668,Change the Posix ID offset assigned to the trusted domain,LSA Trusted Domain Access Rights,4661
+%%5669,Undefined Access (no effect) Bit 5,LSA Trusted Domain Access Rights,4661
+%%5670,Undefined Access (no effect) Bit 6,LSA Trusted Domain Access Rights,4661
+%%5671,Undefined Access (no effect) Bit 7,LSA Trusted Domain Access Rights,4661
+%%5672,Undefined Access (no effect) Bit 8,LSA Trusted Domain Access Rights,4661
+%%5673,Undefined Access (no effect) Bit 9,LSA Trusted Domain Access Rights,4661
+%%5674,Undefined Access (no effect) Bit 10,LSA Trusted Domain Access Rights,4661
+%%5675,Undefined Access (no effect) Bit 11,LSA Trusted Domain Access Rights,4661
+%%5676,Undefined Access (no effect) Bit 12,LSA Trusted Domain Access Rights,4661
+%%5677,Undefined Access (no effect) Bit 13,LSA Trusted Domain Access Rights,4661
+%%5678,Undefined Access (no effect) Bit 14,LSA Trusted Domain Access Rights,4661
+%%5679,Undefined Access (no effect) Bit 15,LSA Trusted Domain Access Rights,4661
+%%5680,Query account information,LSA Account Access Rights,4661
+%%5681,Change privileges assigned to account,LSA Account Access Rights,4661
+%%5682,Change quotas assigned to account,LSA Account Access Rights,4661
+%%5683,Change logon capabilities assigned to account,LSA Account Access Rights,4661
+%%5684,Change the Posix ID offset assigned to the accounted domain,LSA Account Access Rights,4661
+%%5685,Undefined Access (no effect) Bit 5,LSA Account Access Rights,4661
+%%5686,Undefined Access (no effect) Bit 6,LSA Account Access Rights,4661
+%%5687,Undefined Access (no effect) Bit 7,LSA Account Access Rights,4661
+%%5688,Undefined Access (no effect) Bit 8,LSA Account Access Rights,4661
+%%5689,Undefined Access (no effect) Bit 9,LSA Account Access Rights,4661
+%%5690,Undefined Access (no effect) Bit 10,LSA Account Access Rights,4661
+%%5691,Undefined Access (no effect) Bit 11,LSA Account Access Rights,4661
+%%5692,Undefined Access (no effect) Bit 12,LSA Account Access Rights,4661
+%%5693,Undefined Access (no effect) Bit 13,LSA Account Access Rights,4661
+%%5694,Undefined Access (no effect) Bit 14,LSA Account Access Rights,4661
+%%5695,Undefined Access (no effect) Bit 15,LSA Account Access Rights,4661
+%%5696,KeyedEvent Wait,Keyed Event Access Rights,4656
+%%5697,KeyedEvent Wake,Keyed Event Access Rights,4656
+%%5698,Undefined Access (no effect) Bit 2,Keyed Event Access Rights,4656
+%%5699,Undefined Access (no effect) Bit 3,Keyed Event Access Rights,4656
+%%5700,Undefined Access (no effect) Bit 4,Keyed Event Access Rights,4656
+%%5701,Undefined Access (no effect) Bit 5,Keyed Event Access Rights,4656
+%%5702,Undefined Access (no effect) Bit 6,Keyed Event Access Rights,4656
+%%5703,Undefined Access (no effect) Bit 7,Keyed Event Access Rights,4656
+%%5704,Undefined Access (no effect) Bit 8,Keyed Event Access Rights,4656
+%%5705,Undefined Access (no effect) Bit 9,Keyed Event Access Rights,4656
+%%5706,Undefined Access (no effect) Bit 10,Keyed Event Access Rights,4656
+%%5707,Undefined Access (no effect) Bit 11,Keyed Event Access Rights,4656
+%%5708,Undefined Access (no effect) Bit 12,Keyed Event Access Rights,4656
+%%5709,Undefined Access (no effect) Bit 13,Keyed Event Access Rights,4656
+%%5710,Undefined Access (no effect) Bit 14,Keyed Event Access Rights,4656
+%%5711,Undefined Access (no effect) Bit 15,Keyed Event Access Rights,4656
+%%6656,Enumerate desktops,Window Station Access Rights,4656
+%%6657,Read attributes,Window Station Access Rights,4656
+%%6658,Access Clipboard,Window Station Access Rights,4656
+%%6659,Create desktop,Window Station Access Rights,4656
+%%6660,Write attributes,Window Station Access Rights,4656
+%%6661,Access global atoms,Window Station Access Rights,4656
+%%6662,Exit windows,Window Station Access Rights,4656
+%%6663,Unused Access Flag,Window Station Access Rights,4656
+%%6664,Include this windowstation in enumerations,Window Station Access Rights,4656
+%%6665,Read screen,Window Station Access Rights,4656
+%%6672,Read Objects,Desktop Access Rights,4656
+%%6673,Create window,Desktop Access Rights,4656
+%%6674,Create menu,Desktop Access Rights,4656
+%%6675,Hook control,Desktop Access Rights,4656
+%%6676,Journal (record),Desktop Access Rights,4656
+%%6677,Journal (playback),Desktop Access Rights,4656
+%%6678,Include this desktop in enumerations,Desktop Access Rights,4656
+%%6679,Write objects,Desktop Access Rights,4656
+%%6680,Switch to this desktop,Desktop Access Rights,4656
+%%6912,Administer print server,Printer Access Rights,4656
+%%6913,Enumerate printers,Printer Access Rights,4656
+%%6930,Full Control,Printer Access Rights,4656
+%%6931,Print,Printer Access Rights,4656
+%%6948,Administer Document,Printer Access Rights,4656
+%%7168,Connect to service controller,Service Control Manager Access Rights,4656
+%%7169,Create a new service,Service Control Manager Access Rights,4656
+%%7170,Enumerate services,Service Control Manager Access Rights,4656
+%%7171,Lock service database for exclusive access,Service Control Manager Access Rights,4656
+%%7172,Query service database lock state,Service Control Manager Access Rights,4656
+%%7173,Set last-known-good state of service database,Service Control Manager Access Rights,4656
+%%7184,Query service configuration information,Service Access Rights,4656
+%%7185,Set service configuration information,Service Access Rights,4656
+%%7186,Query status of service,Service Access Rights,4656
+%%7187,Enumerate dependencies of service,Service Access Rights,4656
+%%7188,Start the service,Service Access Rights,4656
+%%7189,Stop the service,Service Access Rights,4656
+%%7190,Pause or continue the service,Service Access Rights,4656
+%%7191,Query information from service,Service Access Rights,4656
+%%7192,Issue service-specific control commands,Service Access Rights,4656
+%%7424,DDE Share Read,DDE Share Access Rights,4656
+%%7425,DDE Share Write,DDE Share Access Rights,4656
+%%7426,DDE Share Initiate Static,DDE Share Access Rights,4656
+%%7427,DDE Share Initiate Link,DDE Share Access Rights,4656
+%%7428,DDE Share Request,DDE Share Access Rights,4656
+%%7429,DDE Share Advise,DDE Share Access Rights,4656
+%%7430,DDE Share Poke,DDE Share Access Rights,4656
+%%7431,DDE Share Execute,DDE Share Access Rights,4656
+%%7432,DDE Share Add Items,DDE Share Access Rights,4656
+%%7433,DDE Share List Items,DDE Share Access Rights,4656
+%%7680,Create Child,Directory Service Access Rights,4661
+%%7681,Delete Child,Directory Service Access Rights,4661
+%%7682,List Contents,Directory Service Access Rights,4661
+%%7683,Write Self,Directory Service Access Rights,4661
+%%7684,Read Property,Directory Service Access Rights,4661
+%%7685,Write Property,Directory Service Access Rights,4661
+%%7686,Delete Tree,Directory Service Access Rights,4661
+%%7687,List Object,Directory Service Access Rights,4661
+%%7688,Control Access,Directory Service Access Rights,4661
+%%7689,Undefined Access (no effect) Bit 9,Directory Service Access Rights,4661
+%%7690,Undefined Access (no effect) Bit 10,Directory Service Access Rights,4661
+%%7691,Undefined Access (no effect) Bit 11,Directory Service Access Rights,4661
+%%7692,Undefined Access (no effect) Bit 12,Directory Service Access Rights,4661
+%%7693,Undefined Access (no effect) Bit 13,Directory Service Access Rights,4661
+%%7694,Undefined Access (no effect) Bit 14,Directory Service Access Rights,4661
+%%7695,Undefined Access (no effect) Bit 15,Directory Service Access Rights,4661
+%%7936,Audit Set System Policy,Audit Policy Access Rights,4719
+%%7937,Audit Query System Policy,Audit Policy Access Rights,4719
+%%7938,Audit Set Per User Policy,Audit Policy Access Rights,4719
+%%7939,Audit Query Per User Policy,Audit Policy Access Rights,4719
+%%7940,Audit Enumerate Users,Audit Policy Access Rights,4719
+%%7941,Audit Set Options,Audit Policy Access Rights,4719
+%%7942,Audit Query Options,Audit Policy Access Rights,4719
+%%8064,Port sharing (read),Terminal Services Access Rights,4656
+%%8065,Port sharing (write),Terminal Services Access Rights,4656
+%%8096,Default credentials,Credentials Access Rights,4661
+%%8097,Credentials manager,Credentials Access Rights,4661
+%%8098,Fresh credentials,Credentials Access Rights,4661
+%%8099,Read Credential,Credentials Access Rights,4661
+%%8100,Enumerate Credentials,Credentials Access Rights,4661
+%%8101,Read Domain Credentials,Credentials Access Rights,4661
+%%8102,Find Best Credential,Credentials Access Rights,4661
+%%8103,Read By Token Handle,Credentials Access Rights,4661
+%%8192,Kerberos,IPsec Authentication Method,4646
+%%8193,Preshared key,IPsec Authentication Method,4646
+%%8194,Unknown authentication,IPsec Authentication Method,4646
+%%8195,DES,IPsec Authentication Method,4646
+%%8196,3DES,IPsec Authentication Method,4646
+%%8197,MD5,IPsec Authentication Method,4646
+%%8198,SHA1,IPsec Authentication Method,4646
+%%8199,Local computer,IPsec / IKE State,4650
+%%8200,Remote computer,IPsec / IKE State,4650
+%%8201,No state,IPsec / IKE State,4650
+%%8202,Sent first (SA) payload,IPsec / IKE State,4650
+%%8203,Sent second (KE) payload,IPsec / IKE State,4650
+%%8204,Sent third (ID) payload,IPsec / IKE State,4650
+%%8205,Initiator,IPsec / IKE State,4650
+%%8206,Responder,IPsec / IKE State,4650
+%%8207,No state,IPsec / IKE State,4650
+%%8208,Sent first (SA) payload,IPsec / IKE State,4650
+%%8209,Sent final payload,IPsec / IKE State,4650
+%%8210,Complete,IPsec / IKE State,4650
+%%8211,Unknown,IPsec / IKE State,4650
+%%8212,Transport,IPsec / IKE State,4650
+%%8213,Tunnel,IPsec / IKE State,4650
+%%8214,IKE/AuthIP DoS prevention mode started,IPsec / IKE State,4650
+%%8215,IKE/AuthIP DoS prevention mode stopped,IPsec / IKE State,4650
+%%8216,Enabled,IPsec / IKE State,4650
+%%8217,Not enabled,IPsec / IKE State,4650
+%%8218,No state,IPsec / IKE State,4650
+%%8219,Sent first (EM attributes) payload,IPsec / IKE State,4650
+%%8220,Sent second (SSPI) payload,IPsec / IKE State,4650
+%%8221,Sent third (hash) payload,IPsec / IKE State,4650
+%%8222,IKEv1,IPsec / IKE State,4650
+%%8223,AuthIP,IPsec / IKE State,4650
+%%8224,Anonymous,IPsec / IKE State,4650
+%%8225,NTLM V2,IPsec / IKE State,4650
+%%8226,CGA,IPsec / IKE State,4650
+%%8227,Certificate,IPsec / IKE State,4650
+%%8228,SSL,IPsec / IKE State,4650
+%%8229,None,IPsec / IKE State,4650
+%%8230,DH group 1,IPsec / IKE State,4650
+%%8231,DH group 2,IPsec / IKE State,4650
+%%8232,DH group 14,IPsec / IKE State,4650
+%%8233,DH group ECP 256,IPsec / IKE State,4650
+%%8234,DH group ECP 384,IPsec / IKE State,4650
+%%8235,AES-128,IPsec / IKE State,4650
+%%8236,AES-192,IPsec / IKE State,4650
+%%8237,AES-256,IPsec / IKE State,4650
+%%8238,Certificate ECDSA P256,IPsec / IKE State,4650
+%%8239,Certificate ECDSA P384,IPsec / IKE State,4650
+%%8240,SSL ECDSA P256,IPsec / IKE State,4650
+%%8241,SSL ECDSA P384,IPsec / IKE State,4650
+%%8242,SHA 256,IPsec / IKE State,4650
+%%8243,SHA 384,IPsec / IKE State,4650
+%%8244,IKEv2,IPsec / IKE State,4650
+%%8245,EAP payload sent,IPsec / IKE State,4650
+%%8246,Authentication payload sent,IPsec / IKE State,4650
+%%8247,EAP,IPsec / IKE State,4650
+%%8248,DH group 24,IPsec / IKE State,4650
+%%8272,System,Audit Category,4719
+%%8273,Logon/Logoff,Audit Category,4719
+%%8274,Object Access,Audit Category,4719
+%%8275,Privilege Use,Audit Category,4719
+%%8276,Detailed Tracking,Audit Category,4719
+%%8277,Policy Change,Audit Category,4719
+%%8278,Account Management,Audit Category,4719
+%%8279,DS Access,Audit Category,4719
+%%8280,Account Logon,Audit Category,4719
+%%8448,Success removed,Audit Policy Change,4719
+%%8449,Success Added,Audit Policy Change,4719
+%%8450,Failure removed,Audit Policy Change,4719
+%%8451,Failure added,Audit Policy Change,4719
+%%8452,Success include removed,Audit Policy Change,4719
+%%8453,Success include added,Audit Policy Change,4719
+%%8454,Success exclude removed,Audit Policy Change,4719
+%%8455,Success exclude added,Audit Policy Change,4719
+%%8456,Failure include removed,Audit Policy Change,4719
+%%8457,Failure include added,Audit Policy Change,4719
+%%8458,Failure exclude removed,Audit Policy Change,4719
+%%8459,Failure exclude added,Audit Policy Change,4719
+%%12288,Security State Change,Audit Subcategory,4719
+%%12289,Security System Extension,Audit Subcategory,4719
+%%12290,System Integrity,Audit Subcategory,4719
+%%12291,IPsec Driver,Audit Subcategory,4719
+%%12292,Other System Events,Audit Subcategory,4719
+%%12544,Logon,Audit Subcategory,4719
+%%12545,Logoff,Audit Subcategory,4719
+%%12546,Account Lockout,Audit Subcategory,4719
+%%12547,IPsec Main Mode,Audit Subcategory,4719
+%%12548,Special Logon,Audit Subcategory,4719
+%%12549,IPsec Quick Mode,Audit Subcategory,4719
+%%12550,IPsec Extended Mode,Audit Subcategory,4719
+%%12551,Other Logon/Logoff Events,Audit Subcategory,4719
+%%12552,Network Policy Server,Audit Subcategory,4719
+%%12553,User / Device Claims,Audit Subcategory,4719
+%%12554,Group Membership,Audit Subcategory,4719
+%%12800,File System,Audit Subcategory,4719
+%%12801,Registry,Audit Subcategory,4719
+%%12802,Kernel Object,Audit Subcategory,4719
+%%12803,SAM,Audit Subcategory,4719
+%%12804,Other Object Access Events,Audit Subcategory,4719
+%%12805,Certification Services,Audit Subcategory,4719
+%%12806,Application Generated,Audit Subcategory,4719
+%%12807,Handle Manipulation,Audit Subcategory,4719
+%%12808,File Share,Audit Subcategory,4719
+%%12809,Filtering Platform Packet Drop,Audit Subcategory,4719
+%%12810,Filtering Platform Connection,Audit Subcategory,4719
+%%12811,Detailed File Share,Audit Subcategory,4719
+%%12812,Removable Storage,Audit Subcategory,4719
+%%12813,Central Policy Staging,Audit Subcategory,4719
+%%13056,Sensitive Privilege Use,Audit Subcategory,4719
+%%13057,Non Sensitive Privilege Use,Audit Subcategory,4719
+%%13058,Other Privilege Use Events,Audit Subcategory,4719
+%%13312,Process Creation,Audit Subcategory,4719
+%%13313,Process Termination,Audit Subcategory,4719
+%%13314,DPAPI Activity,Audit Subcategory,4719
+%%13315,RPC Events,Audit Subcategory,4719
+%%13316,Plug and Play Events,Audit Subcategory,4719
+%%13317,Token Right Adjusted Events,Audit Subcategory,4719
+%%13568,Audit Policy Change,Audit Subcategory,4719
+%%13569,Authentication Policy Change,Audit Subcategory,4719
+%%13570,Authorization Policy Change,Audit Subcategory,4719
+%%13571,MPSSVC Rule-Level Policy Change,Audit Subcategory,4719
+%%13572,Filtering Platform Policy Change,Audit Subcategory,4719
+%%13573,Other Policy Change Events,Audit Subcategory,4719
+%%13824,User Account Management,Audit Subcategory,4719
+%%13825,Computer Account Management,Audit Subcategory,4719
+%%13826,Security Group Management,Audit Subcategory,4719
+%%13827,Distribution Group Management,Audit Subcategory,4719
+%%13828,Application Group Management,Audit Subcategory,4719
+%%13829,Other Account Management Events,Audit Subcategory,4719
+%%14080,Directory Service Access,Audit Subcategory,4719
+%%14081,Directory Service Changes,Audit Subcategory,4719
+%%14082,Directory Service Replication,Audit Subcategory,4719
+%%14083,Detailed Directory Service Replication,Audit Subcategory,4719
+%%14336,Credential Validation,Audit Subcategory,4719
+%%14337,Kerberos Service Ticket Operations,Audit Subcategory,4719
+%%14338,Other Account Logon Events,Audit Subcategory,4719
+%%14339,Kerberos Authentication Service,Audit Subcategory,4719
+%%14592,Inbound,WFP Direction,5157
+%%14593,Outbound,WFP Direction,5157
+%%14594,Forward,WFP Direction,5157
+%%14595,Bidirectional,WFP Direction,5157
+%%14596,IP Packet,WFP Direction,5157
+%%14597,Transport,WFP Direction,5157
+%%14598,Forward,WFP Direction,5157
+%%14599,Stream,WFP Direction,5157
+%%14600,Datagram Data,WFP Direction,5157
+%%14601,ICMP Error,WFP Direction,5157
+%%14602,MAC 802.3,WFP Direction,5157
+%%14603,MAC Native,WFP Direction,5157
+%%14604,vSwitch,WFP Direction,5157
+%%14608,Resource Assignment,WFP Layer Name,5157
+%%14609,Listen,WFP Layer Name,5157
+%%14610,Receive/Accept,WFP Layer Name,5157
+%%14611,Connect,WFP Layer Name,5157
+%%14612,Flow Established,WFP Layer Name,5157
+%%14614,Resource Release,WFP Layer Name,5157
+%%14615,Endpoint Closure,WFP Layer Name,5157
+%%14616,Connect Redirect,WFP Layer Name,5157
+%%14617,Bind Redirect,WFP Layer Name,5157
+%%14624,Stream Packet,WFP Layer Name,5157
+%%14640,ICMP Echo-Request,WFP Layer Name,5157
+%%14641,vSwitch Ingress,WFP Layer Name,5157
+%%14642,vSwitch Egress,WFP Layer Name,5157
+%%14672,<Binary>,Value Representation,4657
+%%14673,[NULL],Value Representation,4657
+%%14674,Value Added,Directory Service Change Action,5136
+%%14675,Value Deleted,Directory Service Change Action,5136
+%%14676,Active Directory Domain Services,Directory Service Type,5136
+%%14677,Active Directory Lightweight Directory Services,Directory Service Type,5136
+%%14678,Yes,Boolean,5136
+%%14679,No,Boolean,5136
+%%14680,Value Added With Expiration Time,Directory Service Change Action,5136
+%%14681,Value Deleted With Expiration Time,Directory Service Change Action,5136
+%%14688,Value Auto Deleted With Expiration Time,Directory Service Change Action,5136
+%%16384,Add,IPsec Algorithm / Setting,5040
+%%16385,Delete,IPsec Algorithm / Setting,5040
+%%16386,Boot-time,IPsec Algorithm / Setting,5040
+%%16387,Persistent,IPsec Algorithm / Setting,5040
+%%16388,Not persistent,IPsec Algorithm / Setting,5040
+%%16389,Block,IPsec Algorithm / Setting,5040
+%%16390,Permit,IPsec Algorithm / Setting,5040
+%%16391,Callout,IPsec Algorithm / Setting,5040
+%%16392,MD5,IPsec Algorithm / Setting,5040
+%%16393,SHA-1,IPsec Algorithm / Setting,5040
+%%16394,SHA-256,IPsec Algorithm / Setting,5040
+%%16395,AES-GCM 128,IPsec Algorithm / Setting,5040
+%%16396,AES-GCM 192,IPsec Algorithm / Setting,5040
+%%16397,AES-GCM 256,IPsec Algorithm / Setting,5040
+%%16398,DES,IPsec Algorithm / Setting,5040
+%%16399,3DES,IPsec Algorithm / Setting,5040
+%%16400,AES-128,IPsec Algorithm / Setting,5040
+%%16401,AES-192,IPsec Algorithm / Setting,5040
+%%16402,AES-256,IPsec Algorithm / Setting,5040
+%%16403,Transport,IPsec Algorithm / Setting,5040
+%%16404,Tunnel,IPsec Algorithm / Setting,5040
+%%16405,Responder,IPsec Algorithm / Setting,5040
+%%16406,Initiator,IPsec Algorithm / Setting,5040
+%%16407,AES-GMAC 128,IPsec Algorithm / Setting,5040
+%%16408,AES-GMAC 192,IPsec Algorithm / Setting,5040
+%%16409,AES-GMAC 256,IPsec Algorithm / Setting,5040
+%%16416,AuthNoEncap Transport,IPsec Algorithm / Setting,5040
+%%16896,Enable WMI Account,WMI Operation,4671
+%%16897,Execute Method,WMI Operation,4671
+%%16898,Full Write,WMI Operation,4671
+%%16899,Partial Write,WMI Operation,4671
+%%16900,Provider Write,WMI Operation,4671
+%%16901,Remote Access,WMI Operation,4671
+%%16902,Subscribe,WMI Operation,4671
+%%16903,Publish,WMI Operation,4671
+%%16904,AES-GSM-128,WMI Operation,4671
+%%16905,AES-GSM-256,WMI Operation,4671
