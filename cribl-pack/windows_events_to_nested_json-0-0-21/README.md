@@ -4,6 +4,12 @@
 
 ---
 
+## Recent update — 0.0.21 (TA-side fix, update your TA)
+
+No functional change to this pack, but the paired **Cribl_TA_windows** got an important fix: `process`, `process_id`, `user`, `user_name`, `src_user` (and several related Security CIM fields) were only resolving for **Classic-rendered** events (`Message.*` paths), not **XML-rendered** ones (`EventData.*` paths) — found when a customer compared `EventCode=4688` between production and a Cribl-fed test index and saw `process`/`process_id`/`user` missing while `NewProcessName`/`RecordNumber` worked fine. If your fleet collects Windows events as XML (the default for Cribl Edge, WEC/WEF), update to the 0.0.21 TA — the fixed copy is already bundled in this pack's `data/uploads/Cribl_TA_windows.tgz`. See the [TA changelog](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/blob/main/splunk-ta/Cribl_TA_windows/README.md#changelog) for the full field list.
+
+---
+
 ## Scope and limits
 
 This pack **only** targets **Windows Event Log–like** `_raw`: **XML** (`<Event>…`) or **classic** rendered text (headers + **Message**). It normalizes those to nested JSON and **`windows:json`** / **`windows:json:<Channel>`** metadata for **Cribl_TA_windows**. It does **not** replace dedicated pipelines for non–event-log-primary shapes (for example **DHCP server audit** files for **`DhcpSrvLog`**, **Perfmon**, **WMI** inventory, **registry** exports, etc.); plan a **separate Cribl pack (and Splunk TA)** if you need those as first-class products.

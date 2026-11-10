@@ -9,6 +9,10 @@ A matched pair of artifacts for collecting Windows Event Log data through **Crib
 | **Version** | 0.0.21 (both artifacts, shared in lockstep from 0.0.5 onward) |
 | **Author** | David Maislin ([david@cribl.io](mailto:david@cribl.io)) |
 
+## Recent update — 0.0.21
+
+A customer validating the pack against production found `process`, `process_id`, and `user` missing on `EventCode=4688` events, even though `NewProcessName` and `RecordNumber` came through fine. Root cause: the TA's Security CIM field mappings for those fields were only ever wired to the **Classic-rendered** (`Message.*`, underscored) field paths, never the **XML** (`EventData.*`, camelCase) ones — so any fleet collecting Windows events as XML (the common case for Edge/WEC) silently lost CIM-critical fields the Classic path had. 0.0.21 adds the missing `EventData.*` sources alongside the existing `Message.*` ones, so both naming conventions resolve. **If you're on 0.0.20 or earlier and collecting XML-formatted Windows events, update the TA.** Full details in [`splunk-ta/Cribl_TA_windows/README.md`](splunk-ta/Cribl_TA_windows/README.md#changelog) and [`CHANGES.md`](CHANGES.md).
+
 ## What this is
 
 Windows Event Log data shows up in wildly different shapes depending on how it was collected — `.evt` classic rendered text, `.evtx` XML, or whatever a Splunk Universal Forwarder or Cribl Edge happened to normalize it to. This repo standardizes all of that into one of two structured outputs:
