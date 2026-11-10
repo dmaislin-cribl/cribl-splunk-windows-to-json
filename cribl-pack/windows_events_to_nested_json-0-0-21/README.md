@@ -344,6 +344,8 @@ The script probes `%%1`..`%%30000` across five source DLLs by default (`adtschem
 
 Pack version is tracked in `package.json` and aligned with the paired **Cribl_TA_windows** Splunk app. From 0.0.5 onward, both artifacts share the same version number to keep support conversations simple.
 
+**0.0.21** — Lockstep version bump only; no functional pack change. The paired TA fixed `process`/`process_id`/`user`/`user_name`/`src_user` (and siblings) not resolving for XML-collected Security events — those CIM chains only ever had `Message.*` (Classic) sources, never the matching `EventData.*` (XML) ones. See the TA's own changelog (0.0.21) for detail. The TA copy embedded in this pack's `data/uploads/` was refreshed to the fixed build.
+
 **0.0.20** — **New `Windows_Events_to_OCSF` pipeline** (contributed by [simondev65](https://github.com/simondev65/cribl-splunk-windows-to-json/tree/feature/ocsf-pipeline)), merged on top of the 0.0.19 fixes. Maps Windows XML and Classic events to OCSF 1.4.0 across 17 classes — authentication, account and group changes, process, network, DNS, file, registry, module, driver, scheduled task, service, log clear and PowerShell script events, with Base Event for everything else. It reuses the nested-JSON parser logic (its own copy, not a shared import — Cribl pipelines can't reference another pipeline's Code function), so both formats map identically. The new route `windows_ocsf` ships disabled. New pack variables are `ocsfOutputMode`, `ocsfIncludeUnmapped` and `ocsfIncludeRawData`, and there are anonymized sample files for both formats. See [OCSF pipeline](#ocsf-pipeline-windows_events_to_ocsf).
 
 Two fixes applied while merging, since the OCSF branch forked before the 0.0.19 fixes existed:

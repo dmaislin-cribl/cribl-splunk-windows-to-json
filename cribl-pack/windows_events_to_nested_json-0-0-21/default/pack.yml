@@ -1,6 +1,6 @@
 id: windows_events_to_nested_json
 displayName: Windows Events to Nested JSON
-version: 0.0.20
+version: 0.0.21
 author: David Maislin <david@cribl.io>
 description: >-
   Converts Windows Event Log XML (WEC/WEF, Sysmon, UF XML rendering) and

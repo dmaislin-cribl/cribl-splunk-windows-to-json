@@ -4,10 +4,22 @@ Corrective actions taken against the findings in `REVIEW.md`, plus one follow-up
 
 | Artifact | Original | Interim (never shipped) | Current |
 |---|---|---|---|
-| Cribl Pack (`windows_events_to_nested_json`) | 0.0.3 | 0.0.4 – 0.0.17 | **0.0.20** |
-| Splunk TA (`Cribl_TA_windows`) | 0.0.1 | 0.0.2, 0.0.5 – 0.0.17 | **0.0.20** |
+| Cribl Pack (`windows_events_to_nested_json`) | 0.0.3 | 0.0.4 – 0.0.17 | **0.0.21** |
+| Splunk TA (`Cribl_TA_windows`) | 0.0.1 | 0.0.2, 0.0.5 – 0.0.17 | **0.0.21** |
 
-## 0.0.20 (this release) — merged `Windows_Events_to_OCSF` pipeline
+## 0.0.21 (this release) — TA: `EventData.*` (XML) coverage for Security CIM fields that only had `Message.*` (Classic) sources
+
+**Found via customer validation testing.** A customer comparing `EventCode=4688` events between production (native Splunk XML collection) and a Cribl-pack-fed test index found `NewProcessName`/`RecordNumber` populated correctly, but `process`, `process_id`, and `user` consistently missing.
+
+**Root cause.** The pack emits two different JSON shapes depending on how Windows rendered the event: Classic-rendered text lands nested under `Message.<Section>.<Field>` (underscored, e.g. `Message.Process_Information.New_Process_ID`); XML-rendered events (the common case for Edge/WEC-collected fleets) land flat under `EventData.<AttributeName>` (camelCase, no underscore, e.g. `EventData.NewProcessId`). The TA's `[source::windows:json:Security]` CIM chains for `user`, `user_name`, `src_user`, `process`, and `process_id` — and the bare Classic-named fields those EVALs depend on (`Subject_Account_Name`, `New_Process_Name`, `New_Process_ID`, `Process_ID`, `Creator_Process_ID`, `Creator_Process_Name`, `Process_Command_Line`, `Target_Account_Name`, `Target_Account_Domain`) — were only ever given `Message.*` sources. The 0.0.19 fix added `Message.Subject.Account_Name` coverage (Classic only); the XML side of the same fields was never added, even though the matching `EventData.*` flat aliases (`NewProcessName`, `NewProcessId`, `SubjectUserName`, `ProcessID`, `CommandLine`, …) already existed and populate correctly elsewhere in the file.
+
+**Fix.** Added the matching `EventData.*` source as an additional alternative on 14 `FIELDALIAS-*` lines in `props.conf` (`Subject_Account_Name`, `Subject_Account_Domain`, `user`, `user_name`, `src_user`, `process_id`, `Process_Command_Line`, `Target_Account_Domain`, `Target_Account_Name`, `Creator_Process_ID`, `Creator_Process_Name`, `New_Process_ID`, `New_Process_Name`, `Process_ID`), so both naming conventions resolve — matching the pattern already used for fields like `SubjectUserName` elsewhere in the file. This fixes `process`/`process_id`/`user` for 4688 directly, and generalizes to every other event code sharing those same `EVAL-*` chains (4689, 4696, 4673, 4674, 4697, 4703–4767, 4781, 4799, etc.).
+
+**Verification:** every edited line checked for balanced quoting (the file has no local Splunk install to run `btool check` against — recommend running `splunk btool check --app=Cribl_TA_windows` before deploying to the customer).
+
+**Pack:** Lockstep version bump only; no functional pack change. `data/uploads/Cribl_TA_windows.tgz` (the TA copy embedded in the pack) refreshed to the 0.0.21 build so pack-driven TA installs also carry the fix. Pack source folder renamed `windows_events_to_nested_json-0-0-20/` → `windows_events_to_nested_json-0-0-21/` to keep the directory name aligned with the shipping version (per the version-drift lesson in `REVIEW.md` F-P1/F-T5).
+
+## 0.0.20 — merged `Windows_Events_to_OCSF` pipeline
 
 Merged the `feature/ocsf-pipeline` branch from [simondev65/cribl-splunk-windows-to-json](https://github.com/simondev65/cribl-splunk-windows-to-json/tree/feature/ocsf-pipeline), which added a new `Windows_Events_to_OCSF` pipeline mapping Windows XML/Classic events to OCSF 1.4.0 across 17 classes, reusing the same parser logic as `Windows_Events_to_Nested_JSON`. That branch forked before the 0.0.19 fixes below existed, so two things were verified and fixed during the merge rather than ported blindly:
 

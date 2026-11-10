@@ -4,12 +4,22 @@
 
 | Component | Version |
 |-----------|---------|
-| **Splunk app** (`default/app.conf`, `app.manifest`) | **0.0.20** |
-| **Cribl pack** (`windows_events_to_json` / `cribl_pack/...`) | **0.0.20** |
+| **Splunk app** (`default/app.conf`, `app.manifest`) | **0.0.21** |
+| **Cribl pack** (`windows_events_to_json` / `cribl_pack/...`) | **0.0.21** |
 
 The TA and its paired Cribl pack share a single version number from 0.0.5 onward so operators can talk about a single delivery without disambiguation.
 
 ## Changelog
+
+**0.0.21** — `process`, `process_id`, `user`, `user_name`, `src_user` (and several siblings) now resolve for XML-collected events, not just Classic
+
+Found via a customer comparing `EventCode=4688` events between production (native XML collection) and a Cribl-pack-fed test index: `NewProcessName`/`RecordNumber` populated correctly, but `process`/`process_id`/`user` were consistently missing.
+
+**Root cause.** The pack emits Classic-rendered events nested under `Message.<Section>.<Field>` (underscored names) and XML-rendered events flat under `EventData.<AttributeName>` (camelCase, no underscore). The `[source::windows:json:Security]` CIM chains for `user`/`user_name`/`src_user`/`process`/`process_id` — and the bare Classic-named fields they depend on (`Subject_Account_Name`, `New_Process_Name`, `New_Process_ID`, `Process_ID`, `Creator_Process_ID`, `Creator_Process_Name`, `Process_Command_Line`, `Target_Account_Name`, `Target_Account_Domain`) — only ever had `Message.*` sources. The 0.0.19 fix below added Classic (`Message.Subject.Account_Name`) coverage; the XML (`EventData.*`) side of those same fields was never added.
+
+**Fix.** Added the matching `EventData.*` source (`SubjectUserName`, `ProcessId`, `NewProcessId`, `NewProcessName`, `ParentProcessName`, `CommandLine`, `TargetUserName`, `TargetDomainName`, `SubjectDomainName`) as an additional alternative on 14 `FIELDALIAS-*` lines, so both naming conventions resolve — matching the pattern already used for `SubjectUserName` elsewhere in this file. Fixes 4688 directly and generalizes to every other event code sharing those `EVAL-*` chains (4689, 4696, 4673, 4674, 4697, 4703–4767, 4781, 4799, etc.).
+
+**Pack:** Lockstep version bump only; no functional pack change. The TA copy embedded in the pack's `data/uploads/` was refreshed to this build.
 
 **0.0.20** — Lockstep version bump only; no TA-side changes. The paired pack added a new `Windows_Events_to_OCSF` pipeline (contributed by [simondev65](https://github.com/simondev65/cribl-splunk-windows-to-json/tree/feature/ocsf-pipeline)) mapping Windows events to OCSF 1.4.0, with two correctness fixes applied during merge so its parser carries the 0.0.19 multi-line-`Message` fix. OCSF output (`sourcetype=ocsf`) is a separate consumer path from this TA's `windows:json` CIM mapping — nothing here changes. See the pack's own changelog (0.0.20) for detail.
 

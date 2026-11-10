@@ -4,9 +4,9 @@ A matched pair of artifacts for collecting Windows Event Log data through **Crib
 
 | | |
 |---|---|
-| **Cribl Pack** | [`cribl-pack/windows_events_to_nested_json-0-0-20/`](cribl-pack/windows_events_to_nested_json-0-0-20/) |
+| **Cribl Pack** | [`cribl-pack/windows_events_to_nested_json-0-0-21/`](cribl-pack/windows_events_to_nested_json-0-0-21/) |
 | **Splunk TA** | [`splunk-ta/Cribl_TA_windows/`](splunk-ta/Cribl_TA_windows/) |
-| **Version** | 0.0.20 (both artifacts, shared in lockstep from 0.0.5 onward) |
+| **Version** | 0.0.21 (both artifacts, shared in lockstep from 0.0.5 onward) |
 | **Author** | David Maislin ([david@cribl.io](mailto:david@cribl.io)) |
 
 ## What this is
@@ -22,8 +22,8 @@ Both pipelines share the same underlying Windows Event Log parser (XML detection
 
 ```text
 cribl-pack/
-  windows_events_to_nested_json-0-0-20/   # pack source (import this into Cribl, or build the .crbl)
-  windows_events_to_nested_json-0-0-20.crbl  # pre-built pack tarball
+  windows_events_to_nested_json-0-0-21/   # pack source (import this into Cribl, or build the .crbl)
+  windows_events_to_nested_json-0-0-21.crbl  # pre-built pack tarball
 splunk-ta/
   Cribl_TA_windows/                       # Splunk app source
   Cribl_TA_windows.tgz                    # pre-built Splunk app tarball
@@ -34,13 +34,13 @@ JIRA_edge_message_resolution.md           # upstream feature request: native %%N
 
 Each component ships its own detailed README — read those for configuration, field-mapping tables, and version-by-version changelogs:
 
-- [Cribl Pack README](cribl-pack/windows_events_to_nested_json-0-0-20/README.md) — pipeline internals, Splunk metadata conventions, OCSF class mapping, `%%NNNN` lookup regeneration.
+- [Cribl Pack README](cribl-pack/windows_events_to_nested_json-0-0-21/README.md) — pipeline internals, Splunk metadata conventions, OCSF class mapping, `%%NNNN` lookup regeneration.
 - [Splunk TA README](splunk-ta/Cribl_TA_windows/README.md) — CIM coverage, packaging, AppInspect notes, compatibility matrix for `.evt`/`.evtx`/JSON.
 
 ## Quick start
 
 1. **Deploy the TA first.** Copy `splunk-ta/Cribl_TA_windows.tgz` to `$SPLUNK_HOME/etc/apps/`, extract, restart Splunk (or reload apps).
-2. **Import the pack.** In Cribl Stream or Edge, import `cribl-pack/windows_events_to_nested_json-0-0-20.crbl`.
+2. **Import the pack.** In Cribl Stream or Edge, import `cribl-pack/windows_events_to_nested_json-0-0-21.crbl`.
 3. **Route your Windows sources** to the `Windows_Events_to_Nested_JSON` pipeline (the default route). Leave `Windows_Events_to_OCSF` disabled unless you specifically want OCSF output instead.
 4. Confirm events land in Splunk as `sourcetype=windows:json`, `source=windows:json:<Channel>` with CIM-aliased fields populated.
 
