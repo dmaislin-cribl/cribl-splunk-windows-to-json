@@ -4,12 +4,14 @@
 
 | Component | Version |
 |-----------|---------|
-| **Splunk app** (`default/app.conf`, `app.manifest`) | **0.0.21** |
-| **Cribl pack** (`windows_events_to_json` / `cribl_pack/...`) | **0.0.21** |
+| **Splunk app** (`default/app.conf`, `app.manifest`) | **0.0.22** |
+| **Cribl pack** (`windows_events_to_json` / `cribl_pack/...`) | **0.0.22** |
 
 The TA and its paired Cribl pack share a single version number from 0.0.5 onward so operators can talk about a single delivery without disambiguation.
 
 ## Changelog
+
+**0.0.22** — Lockstep version bump only; no TA-side change. The paired pack removed the `Cribl_TA_windows.tgz` copy it bundled under `data/uploads/` — that extra copy had to be manually refreshed on every TA release (as happened in 0.0.21) and could silently go stale otherwise. Download the TA directly rather than via the pack's bundled upload.
 
 **0.0.21** — `process`, `process_id`, `user`, `user_name`, `src_user` (and several siblings) now resolve for XML-collected events, not just Classic
 

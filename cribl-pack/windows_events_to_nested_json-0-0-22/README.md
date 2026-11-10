@@ -1,12 +1,14 @@
 # Windows Events to Nested JSON
 
-**Paired Splunk add-on:** this pack's `windows:json` output is meant to be read by **Cribl_TA_windows** — [⬇ download `Cribl_TA_windows.tgz`](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/raw/main/splunk-ta/Cribl_TA_windows.tgz) · [TA README](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/blob/main/splunk-ta/Cribl_TA_windows/README.md). A copy is also bundled inside this pack under `data/uploads/Cribl_TA_windows.tgz` — browse it from Cribl's **Knowledge → Lookups/Files** view after import (the GitHub link above is the reliable one to click from this README itself). Install the TA on your Splunk indexer/search tier before deploying this pack.
+**Paired Splunk add-on:** this pack's `windows:json` output is meant to be read by **Cribl_TA_windows** — [⬇ download `Cribl_TA_windows.tgz`](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/raw/main/splunk-ta/Cribl_TA_windows.tgz) · [TA README](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/blob/main/splunk-ta/Cribl_TA_windows/README.md). Install the TA on your Splunk indexer/search tier before deploying this pack.
 
 ---
 
-## Recent update — 0.0.21 (TA-side fix, update your TA)
+## Recent update — 0.0.22 (packaging cleanup)
 
-No functional change to this pack, but the paired **Cribl_TA_windows** got an important fix: `process`, `process_id`, `user`, `user_name`, `src_user` (and several related Security CIM fields) were only resolving for **Classic-rendered** events (`Message.*` paths), not **XML-rendered** ones (`EventData.*` paths) — found when a customer compared `EventCode=4688` between production and a Cribl-fed test index and saw `process`/`process_id`/`user` missing while `NewProcessName`/`RecordNumber` worked fine. If your fleet collects Windows events as XML (the default for Cribl Edge, WEC/WEF), update to the 0.0.21 TA — the fixed copy is already bundled in this pack's `data/uploads/Cribl_TA_windows.tgz`. See the [TA changelog](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/blob/main/splunk-ta/Cribl_TA_windows/README.md#changelog) for the full field list.
+No functional change. Removed the `Cribl_TA_windows.tgz` copy that was bundled inside this pack under `data/uploads/` — keeping a second copy there meant it had to be manually refreshed on every TA release (as happened in 0.0.21) or silently go stale. Download the TA directly from the link above; it's the single source of truth for what version you're getting.
+
+`0.0.21` fixed an important paired-TA issue: `process`, `process_id`, `user`, `user_name`, `src_user` (and several related Security CIM fields) were only resolving for **Classic-rendered** events (`Message.*` paths), not **XML-rendered** ones (`EventData.*` paths) — found when a customer compared `EventCode=4688` between production and a Cribl-fed test index and saw `process`/`process_id`/`user` missing while `NewProcessName`/`RecordNumber` worked fine. If your fleet collects Windows events as XML (the default for Cribl Edge, WEC/WEF) and you haven't updated the TA since before 0.0.21, do so now. See the [TA changelog](https://github.com/dmaislin-cribl/cribl-splunk-windows-to-json/blob/main/splunk-ta/Cribl_TA_windows/README.md#changelog) for the full field list.
 
 ---
 
@@ -349,6 +351,8 @@ The script probes `%%1`..`%%30000` across five source DLLs by default (`adtschem
 ## Version
 
 Pack version is tracked in `package.json` and aligned with the paired **Cribl_TA_windows** Splunk app. From 0.0.5 onward, both artifacts share the same version number to keep support conversations simple.
+
+**0.0.22** — Lockstep version bump only; no functional pack change. Removed `data/uploads/Cribl_TA_windows.tgz` (the TA copy bundled inside this pack) — it required a manual refresh on every TA release and could silently go stale otherwise. Download the TA directly from the link at the top of this README instead.
 
 **0.0.21** — Lockstep version bump only; no functional pack change. The paired TA fixed `process`/`process_id`/`user`/`user_name`/`src_user` (and siblings) not resolving for XML-collected Security events — those CIM chains only ever had `Message.*` (Classic) sources, never the matching `EventData.*` (XML) ones. See the TA's own changelog (0.0.21) for detail. The TA copy embedded in this pack's `data/uploads/` was refreshed to the fixed build.
 

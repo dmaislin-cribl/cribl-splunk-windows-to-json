@@ -4,10 +4,20 @@ Corrective actions taken against the findings in `REVIEW.md`, plus one follow-up
 
 | Artifact | Original | Interim (never shipped) | Current |
 |---|---|---|---|
-| Cribl Pack (`windows_events_to_nested_json`) | 0.0.3 | 0.0.4 – 0.0.17 | **0.0.21** |
-| Splunk TA (`Cribl_TA_windows`) | 0.0.1 | 0.0.2, 0.0.5 – 0.0.17 | **0.0.21** |
+| Cribl Pack (`windows_events_to_nested_json`) | 0.0.3 | 0.0.4 – 0.0.17 | **0.0.22** |
+| Splunk TA (`Cribl_TA_windows`) | 0.0.1 | 0.0.2, 0.0.5 – 0.0.17 | **0.0.22** |
 
-## 0.0.21 (this release) — TA: `EventData.*` (XML) coverage for Security CIM fields that only had `Message.*` (Classic) sources
+## 0.0.22 (this release) — Pack: removed the embedded TA copy under `data/uploads/`
+
+**What changed.** Deleted `data/uploads/Cribl_TA_windows.tgz` from the pack. That file was a second copy of the Splunk TA bundled inside the pack so it could be browsed from Cribl's Knowledge → Lookups/Files view after import — but it meant the TA had to be manually rebuilt and re-copied into the pack on every TA release (as happened for 0.0.21), with no mechanism to catch it if that step was skipped and the bundled copy quietly went stale.
+
+**Fix.** Removed the file and the now-empty `data/uploads/` directory from the pack source and from the built `.crbl`. The TA is downloaded directly (`splunk-ta/Cribl_TA_windows.tgz` in this repo, or the GitHub raw link in the pack README) — one place to get it, so there's no second copy that can drift out of version.
+
+**Pack:** Source folder renamed `windows_events_to_nested_json-0-0-21/` → `windows_events_to_nested_json-0-0-22/` to keep the directory name aligned with the shipping version.
+
+**TA:** Lockstep version bump only; no functional TA change.
+
+## 0.0.21 — TA: `EventData.*` (XML) coverage for Security CIM fields that only had `Message.*` (Classic) sources
 
 **Found via customer validation testing.** A customer comparing `EventCode=4688` events between production (native Splunk XML collection) and a Cribl-pack-fed test index found `NewProcessName`/`RecordNumber` populated correctly, but `process`, `process_id`, and `user` consistently missing.
 
